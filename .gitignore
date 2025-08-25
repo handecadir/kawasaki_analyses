@@ -1,0 +1,7 @@
+# Her şeyi görmezden gel
+*
+
+# Sadece .py, README.md ve .gitignore dosyalarını takip et
+!.gitignore
+!README.md
+!*.py
