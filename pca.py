@@ -139,7 +139,7 @@ def _(hl, meta_data_df, pd, result):
 
 @app.cell
 def _(final_mt_with_case_control):
-    # Sadece ilk 100 örneği ve kolonları gösterir
+
     final_mt_with_case_control.cols().show(192)
     return
 
@@ -202,22 +202,21 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
         'Degree_of_CM', 'Family_history_of_CHD_status', 'KD_in_siblings_status'
     ]
 
-    # Sadece bu kolonları al (gerekirse int'e çevir)
     pca_data = df[features].astype(int)
 
     # PCA
     pca = PCA(n_components=2)
     principal_components = pca.fit_transform(pca_data)
 
-    # PCA sonuç DataFrame
+    # PCA result DataFrame
     pca_df = pd.DataFrame(data=principal_components, columns=['PC1', 'PC2'])
 
-    # Benzersiz noktaları kontrol et
+    # Unique points
     unique_points = pca_df.drop_duplicates()
     print(f"\nNumber of unique PCA points: {len(unique_points)}")
     print(f"Total number of PCA points: {len(pca_df)}")
 
-    # Jitter ekle
+    # Jitter adding
     np.random.seed(42)
     jitter_amount = 0.05 
     pca_df['PC1_jittered'] = pca_df['PC1'] + np.random.normal(0, jitter_amount, size=len(pca_df))
@@ -231,7 +230,7 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
     plt.ylabel('Principal Component 2')
     plt.show()
 
-    # Her feature için ayrı scatter
+    # For every featues scatter
     for feature in features:
         plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
         sns.scatterplot(x='PC1_jittered', y='PC2_jittered', hue=df[feature], data=pca_df, s=70, alpha=0.8, palette='viridis')
@@ -249,57 +248,53 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
 
 
 @app.cell
-def _():
-    return
-
-
-@app.cell
 def _(plt, scores):
-    scores_correct=  scores.to_pandas()
-    # Aykırı değerleri tanımlayan eşik değerleri
+    scores_correct = scores.to_pandas()
+
+    # Outlier detection thresholds
     pc1_threshold = -0.1
     pc2_lower_threshold = -0.075
     pc2_upper_threshold = 0.075
 
-    # Extract PC1 and PC2 columns
+    # Extract PC1 and PC2 columns from the scores
     scores_correct['PC1'] = scores_correct['scores'].apply(lambda x: x[0])
     scores_correct['PC2'] = scores_correct['scores'].apply(lambda x: x[1])
 
-    # Aykırı değer olmayan (inlier) verileri filtrele
+    # Filter inliers based on the thresholds
     clean_scores_correct = scores_correct[
         (scores_correct['PC1'] > pc1_threshold) & 
         (scores_correct['PC2'] > pc2_lower_threshold) &
         (scores_correct['PC2'] < pc2_upper_threshold)
     ]
 
-    # Temizlenmiş veri setinin boyutunu kontrol edebilirsin
-    print(f"Orijinal veri seti boyutu: {scores_correct.shape[0]}")
-    print(f"Temizlenmiş veri seti boyutu: {clean_scores_correct.shape[0]}")
-    # Aykırı değerleri (outliers) bulmak için tersine filtreleme yapalım
+    print(f"Original dataset size: {scores_correct.shape[0]}")
+    print(f"Cleaned dataset size: {clean_scores_correct.shape[0]}")
+
+    # Find outliers by inverse filtering
     outliers = scores_correct[
         ~((scores_correct['PC1'] > pc1_threshold) &
           (scores_correct['PC2'] > pc2_lower_threshold) &
           (scores_correct['PC2'] < pc2_upper_threshold))
     ]
 
-    # Görselleştirme için figür ve eksenleri oluşturalım
+    # Create figure and axes for visualization
     plt.figure(figsize=(10, 8))
 
-    # Temizlenmiş (inlier) verileri gösterelim - Genelde mavi veya açık renkler kullanılır. 💙
+    # Plot inliers 
     plt.scatter(clean_scores_correct['PC1'], clean_scores_correct['PC2'], 
-                label='Temiz Veri (Inliers)', color='skyblue', alpha=0.7)
+                label='Clean Data (Inliers)', color='skyblue', alpha=0.7)
 
-    # Aykırı değerleri (outliers) gösterelim - Dikkat çekmesi için kırmızı renk ideal. ❤️
+    # Plot outliers 
     plt.scatter(outliers['PC1'], outliers['PC2'], 
-                label='Aykırı Değerler (Outliers)', color='red', alpha=0.7)
+                label='Outliers', color='red', alpha=0.7)
 
-    # Eşik çizgilerini de ekleyebiliriz, böylece sınırlar daha net görünür.
-    plt.axvline(x=pc1_threshold, color='green', linestyle='--', label='PC1 Eşiği')
-    plt.axhline(y=pc2_lower_threshold, color='purple', linestyle='--', label='PC2 Eşiği Alt')
-    plt.axhline(y=pc2_upper_threshold, color='orange', linestyle='--', label='PC2 Eşiği Üst')
+    # Add threshold lines for clarity
+    plt.axvline(x=pc1_threshold, color='green', linestyle='--', label='PC1 Threshold')
+    plt.axhline(y=pc2_lower_threshold, color='purple', linestyle='--', label='PC2 Lower Threshold')
+    plt.axhline(y=pc2_upper_threshold, color='orange', linestyle='--', label='PC2 Upper Threshold')
 
-    # Grafiğe başlık ve etiketler ekleyelim, daha anlaşılır olsun.
-    plt.title('PCA Skorları ve Aykırı Değerlerin Tespiti', fontsize=16)
+    # Add title and axis labels for clarity
+    plt.title('PCA Scores and Outlier Detection', fontsize=16)
     plt.xlabel('Principal Component 1 (PC1)', fontsize=12)
     plt.ylabel('Principal Component 2 (PC2)', fontsize=12)
     plt.legend()
@@ -311,24 +306,26 @@ def _(plt, scores):
 
 @app.cell
 def _(final_mt_with_case_control, hl, outliers):
-    # 1. Aykırı değerlerin kimliklerini (s_corrected) bir listeye çevirelim.
+    # 1. Convert the IDs of outliers (s_corrected) into a list
     outlier_ids = outliers['s_corrected'].tolist()
 
-    # 2. Bu listeyi, Hail'ın kullanabileceği bir kümeye dönüştürelim.
+    # 2. Convert this list into a set that Hail can use
     outlier_set = hl.literal(outlier_ids)
 
-    # 3. Aykırı değerleri ana MatrixTable'dan filtreleyelim.
-    temiz_veri = final_mt_with_case_control.filter_cols(
+    # 3. Filter out the outliers from the main MatrixTable
+    clean_data = final_mt_with_case_control.filter_cols(
         ~outlier_set.contains(final_mt_with_case_control.s_corrected)
     )
 
-    # 4. Temizlenmiş veri setinin boyutunu kontrol edelim
-    print("\n--- Veri Boyutu Kontrolü ---")
-    print(f"Orijinal veri boyutu (örnek sayısı): {final_mt_with_case_control.count_cols()}")
-    print(f"Temizlenmiş veri boyutu (örnek sayısı): {temiz_veri.count_cols()}")
-    # Aykırı değer olarak filtrelenen kişilerin kimliklerini görelim
-    print("\n--- Aykırı Değerlerin Kimlikleri ---")
+    # 4. Check the size of the cleaned dataset
+    print("\n--- Dataset Size Check ---")
+    print(f"Original dataset size (number of samples): {final_mt_with_case_control.count_cols()}")
+    print(f"Cleaned dataset size (number of samples): {clean_data.count_cols()}")
+
+    # See the IDs of the individuals filtered as outliers
+    print("\n--- Outlier IDs ---")
     print(outlier_ids)
+
     return
 
 
