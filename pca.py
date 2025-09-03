@@ -15,7 +15,7 @@ def _():
     hl.init()
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
-    return PCA, hl, mo, np, pd, plt, sns
+    return PCA, hl, np, pd, plt, sns
 
 
 @app.cell
@@ -245,102 +245,90 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
         plt.tight_layout()
         plt.show()
 
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
-    # Gerekli kütüphaneleri içe aktarıyoruz
-    import pandas as pd
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.decomposition import PCA
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-
-    # NOT: Bu kod, kullanıcının "df" adında bir pandas DataFrame'i olduğunu varsaymaktadır.
-    # Bu DataFrame, aşağıdaki fenotip sütunlarını içermelidir:
-    # 'CAA_status', 'Diagnostic_Age_Status', 'Sequelae_Status',
-    # 'Family_History_Status', 'Consanguineous_marriage_status',
-    # 'Degree_of_CM', 'Family_history_of_CHD_status', 'KD_in_siblings_status'
-    # Eğer bu sütunlarda kategorik (metin) veriler varsa, bu kod çalışmadan önce
-    # sayısal verilere dönüştürülmeleri (örneğin, One-Hot Encoding ile) gereklidir.
-
-    # 1. Adım: Veriyi Ölçeklendirme (Standardization)
-    # PCA'ya başlamadan önce, tüm verilerin aynı ölçekte olması çok önemlidir.
-    # Bu, büyük değerli sütunların analize hakim olmasını engeller.
-    features = [
-        'CAA_status', 'Diagnostic_Age_Status', 'Sequelae_Status',
-        'Family_History_Status', 'Consanguineous_marriage_status',
-        'Degree_of_CM', 'Family_history_of_CHD_status', 'KD_in_siblings_status'
-    ]
-
-    # Sadece PCA için kullanacağımız sütunları seçiyoruz
-    x = df.loc[:, features].values
-
-    # StandardScaler kullanarak veriyi ölçeklendiriyoruz
-    x = StandardScaler().fit_transform(x)
-
-    # 2. Adım: PCA Modelini Oluşturma ve Uygulama
-    # İki ana bileşen (PC1 ve PC2) oluşturmak için PCA'yı kullanıyoruz.
-    # Genellikle ilk iki bileşen, görselleştirme için yeterli olur.
-    pca = PCA(n_components=2)
-
-    # Ölçeklendirilmiş veriye PCA uyguluyoruz
-    principal_components = pca.fit_transform(x)
-
-    # 3. Adım: Sonuçları Pandas DataFrame'ine Dönüştürme
-    # Sonuçları daha kolay analiz ve görselleştirme için bir DataFrame'e koyuyoruz
-    pca_df = pd.DataFrame(data = principal_components, columns = ['PC1', 'PC2'])
-
-    # 4. Adım: Her Bir Fenotip İçin Ayrı Ayrı PCA Sonuçlarını Görselleştirme
-    # Bu adım, her bir fenotipi ana PCA grafiği üzerinde farklı renkte gösterir.
-    for feature in features:
-        plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
-        sns.scatterplot(x='PC1', y='PC2', hue=df[feature], data=pca_df, s=70, alpha=0.8, palette='viridis')
-
-        # Grafiğe başlık ve eksen isimlerini ekliyoruz
-        plt.title(f'{feature} Durumuna Göre PCA', fontsize=16, fontweight='bold', pad=20)
-        plt.xlabel(f'Birincil Bileşen 1 ({pca.explained_variance_ratio_[0]*100:.2f}%)', fontsize=12)
-        plt.ylabel(f'Birincil Bileşen 2 ({pca.explained_variance_ratio_[1]*100:.2f}%)', fontsize=12)
-
-        # Koordinat eksenlerini ve gridi düzenliyoruz
-        plt.grid(True, linestyle='--', alpha=0.6)
-        plt.axhline(0, color='grey', linestyle='--', linewidth=0.8)
-        plt.axvline(0, color='grey', linestyle='--', linewidth=0.8)
-        plt.box(on=True)
-        plt.tight_layout()
-        plt.show()
-
-    # 5. Adım: Bileşenlerin Ne Kadar Varyansı Açıkladığını Görme
-    # Bu, ilk iki bileşenin orijinal verinin ne kadarını temsil ettiğini gösterir.
-    print('----------------------------------------------------')
-    print('Açıklanan Varyans Oranı:')
-    print(pca.explained_variance_ratio_)
-    print(f'Toplam Açıklanan Varyans: {sum(pca.explained_variance_ratio_)*100:.2f}%')
-    print('----------------------------------------------------')
-    ```eof
-
-    """
-    )
-    return
-
-
-@app.cell
-def _(final_mt_with_case_control):
-    final_mt_with_case_control.describe()
-    return
-
-
-@app.cell
-def _(final_mt_with_case_control):
-    final_mt_with_case_control.entries().show()
-    return
+    return (scores,)
 
 
 @app.cell
 def _():
+    return
+
+
+@app.cell
+def _(plt, scores):
+    scores_correct=  scores.to_pandas()
+    # Aykırı değerleri tanımlayan eşik değerleri
+    pc1_threshold = -0.1
+    pc2_lower_threshold = -0.075
+    pc2_upper_threshold = 0.075
+
+    # Extract PC1 and PC2 columns
+    scores_correct['PC1'] = scores_correct['scores'].apply(lambda x: x[0])
+    scores_correct['PC2'] = scores_correct['scores'].apply(lambda x: x[1])
+
+    # Aykırı değer olmayan (inlier) verileri filtrele
+    clean_scores_correct = scores_correct[
+        (scores_correct['PC1'] > pc1_threshold) & 
+        (scores_correct['PC2'] > pc2_lower_threshold) &
+        (scores_correct['PC2'] < pc2_upper_threshold)
+    ]
+
+    # Temizlenmiş veri setinin boyutunu kontrol edebilirsin
+    print(f"Orijinal veri seti boyutu: {scores_correct.shape[0]}")
+    print(f"Temizlenmiş veri seti boyutu: {clean_scores_correct.shape[0]}")
+    # Aykırı değerleri (outliers) bulmak için tersine filtreleme yapalım
+    outliers = scores_correct[
+        ~((scores_correct['PC1'] > pc1_threshold) &
+          (scores_correct['PC2'] > pc2_lower_threshold) &
+          (scores_correct['PC2'] < pc2_upper_threshold))
+    ]
+
+    # Görselleştirme için figür ve eksenleri oluşturalım
+    plt.figure(figsize=(10, 8))
+
+    # Temizlenmiş (inlier) verileri gösterelim - Genelde mavi veya açık renkler kullanılır. 💙
+    plt.scatter(clean_scores_correct['PC1'], clean_scores_correct['PC2'], 
+                label='Temiz Veri (Inliers)', color='skyblue', alpha=0.7)
+
+    # Aykırı değerleri (outliers) gösterelim - Dikkat çekmesi için kırmızı renk ideal. ❤️
+    plt.scatter(outliers['PC1'], outliers['PC2'], 
+                label='Aykırı Değerler (Outliers)', color='red', alpha=0.7)
+
+    # Eşik çizgilerini de ekleyebiliriz, böylece sınırlar daha net görünür.
+    plt.axvline(x=pc1_threshold, color='green', linestyle='--', label='PC1 Eşiği')
+    plt.axhline(y=pc2_lower_threshold, color='purple', linestyle='--', label='PC2 Eşiği Alt')
+    plt.axhline(y=pc2_upper_threshold, color='orange', linestyle='--', label='PC2 Eşiği Üst')
+
+    # Grafiğe başlık ve etiketler ekleyelim, daha anlaşılır olsun.
+    plt.title('PCA Skorları ve Aykırı Değerlerin Tespiti', fontsize=16)
+    plt.xlabel('Principal Component 1 (PC1)', fontsize=12)
+    plt.ylabel('Principal Component 2 (PC2)', fontsize=12)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    return (outliers,)
+
+
+@app.cell
+def _(final_mt_with_case_control, hl, outliers):
+    # 1. Aykırı değerlerin kimliklerini (s_corrected) bir listeye çevirelim.
+    outlier_ids = outliers['s_corrected'].tolist()
+
+    # 2. Bu listeyi, Hail'ın kullanabileceği bir kümeye dönüştürelim.
+    outlier_set = hl.literal(outlier_ids)
+
+    # 3. Aykırı değerleri ana MatrixTable'dan filtreleyelim.
+    temiz_veri = final_mt_with_case_control.filter_cols(
+        ~outlier_set.contains(final_mt_with_case_control.s_corrected)
+    )
+
+    # 4. Temizlenmiş veri setinin boyutunu kontrol edelim
+    print("\n--- Veri Boyutu Kontrolü ---")
+    print(f"Orijinal veri boyutu (örnek sayısı): {final_mt_with_case_control.count_cols()}")
+    print(f"Temizlenmiş veri boyutu (örnek sayısı): {temiz_veri.count_cols()}")
+    # Aykırı değer olarak filtrelenen kişilerin kimliklerini görelim
+    print("\n--- Aykırı Değerlerin Kimlikleri ---")
+    print(outlier_ids)
     return
 
 
