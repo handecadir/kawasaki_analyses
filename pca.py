@@ -15,15 +15,17 @@ def _():
     hl.init()
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
-    return PCA, StandardScaler, hl, np, pd, plt, sns
+    return PCA, hl, mo, np, pd, plt, sns
 
 
 @app.cell
 def _(hl):
-    #resultu kaydettik ya direkt açmak için bunu kullan artık 
+    # We saved the result already, so use this to open it directly
     result = hl.read_matrix_table('kawasaki_filtered.mt')
-    # ID'leri meta ile eşleştirecek şekilde düzelt (-DNA ekini kaldır)
+
+    # Adjust to match IDs with metadata (remove the '-DNA' suffix)
     result = result.key_cols_by(s_corrected=result.s.replace('-DNA', ''))
+
     return (result,)
 
 
@@ -35,40 +37,40 @@ def _(result):
 
 @app.cell
 def _(pd):
-    # TSV dosyasını oku
+    # Read the TSV file
     meta_data_df = pd.read_csv("meta.tsv", sep="\t", header=0)
 
-    print("--- Orijinal Sütun İsimleri ---")
+    print("--- Original Column Names ---")
     print(meta_data_df.columns.tolist())
 
-    # 2. Sütun isimlerini temizle ve daha kullanışlı hale getir
+    # Clean column names to make them more usable
     cleaned_columns_step1 = meta_data_df.columns.str.replace(r'[\(\)\n]', '', regex=True).str.strip().str.replace(' ', '_').str.replace('__', '_')
     meta_data_df.columns = cleaned_columns_step1
 
     meta_data_df = meta_data_df.rename(columns={
-    'No': 'Record_No',
-    'Case_Number': 'Case_Number',
-    'Class': 'Class',
-    'CAA': 'CAA_status',
-    'Diagnostic_Age': 'Diagnostic_Age_Status',
-    'Sequelae': 'Sequelae_Status',
-    'Family_History': 'Family_History_Status',
-    'Sex': 'Sex',
-    'Consanguineous_marriage': 'Consanguineous_marriage_status',
-    'Degree_of_C.M.': 'Degree_of_CM',
-    'Age_at_diagnosis_year': 'Age_at_diagnosis_years',
-    'Family_history_of_CHD': 'Family_history_of_CHD_status',
-    'KD_in_siblings': 'KD_in_siblings_status'
+        'No': 'Record_No',
+        'Case_Number': 'Case_Number',
+        'Class': 'Class',
+        'CAA': 'CAA_status',
+        'Diagnostic_Age': 'Diagnostic_Age_Status',
+        'Sequelae': 'Sequelae_Status',
+        'Family_History': 'Family_History_Status',
+        'Sex': 'Sex',
+        'Consanguineous_marriage': 'Consanguineous_marriage_status',
+        'Degree_of_C.M.': 'Degree_of_CM',
+        'Age_at_diagnosis_year': 'Age_at_diagnosis_years',
+        'Family_history_of_CHD': 'Family_history_of_CHD_status',
+        'KD_in_siblings': 'KD_in_siblings_status'
     })
 
-    print("\n--- Temizlenmiş Sütun İsimleri (Son Hali) ---")
+    print("\n--- Cleaned Column Names (Final Version) ---")
     print(meta_data_df.columns.tolist())
 
-    # 3. 'Case_Number' sütunundaki ID'lerin önüne 'M_' ekleyerek formatla
+    # Format the IDs in the 'Case_Number' column by adding the prefix 'M_'
     id_column_name = 'Case_Number'
     meta_data_df['formatted_sample_id'] = 'M_' + meta_data_df[id_column_name].astype(str)
 
-    print("\n--- Meta Veri ID'leri 'M_' formatına çevrildi (İlk 5 satır) ---")
+    print("\n--- Metadata IDs formatted with 'M_' prefix (First 5 rows) ---")
     print(meta_data_df[['Case_Number', 'formatted_sample_id']].head())
 
     return (meta_data_df,)
@@ -76,55 +78,61 @@ def _(pd):
 
 @app.cell
 def _(hl, meta_data_df, pd, result):
-    # Doğru kod ✅
-    print("--- Veri Tipleri ve Değerler Detaylı Kontrol ---")
+
+    print("--- Data Types and Values Detailed Check ---")
     print("\nDataFrame Shape:", meta_data_df.shape)
-    print("\nSütun İsimleri:")
+
+    print("\nColumn Names:")
     for col in meta_data_df.columns:
-        print(f"- {col}") # ✅ Doğru girinti
-    print("\n--- Her Sütunun Detaylı Analizi ---")
+        print(f"- {col}") 
+
+    print("\n--- Detailed Analysis of Each Column ---")
     for col in meta_data_df.columns:
-        print(f"\n{col}:") # ✅ Doğru girinti
-        print(f" Veri tipi: {meta_data_df[col].dtype}") # ✅ Doğru girinti
-        print(f" Boş değer sayısı: {meta_data_df[col].isna().sum()}") # ✅ Doğru girinti
-        print(f" Benzersiz değer sayısı: {meta_data_df[col].nunique()}") # ✅ Doğru girinti
-        print(f" İlk 10 değer: {meta_data_df[col].value_counts().head(10).to_dict()}") # ✅ Doğru girinti
-        # Sayısal sütunlar için ek istatistikler
-        if pd.api.types.is_numeric_dtype(meta_data_df[col]): # ✅ Doğru girinti
-            print(f" Min: {meta_data_df[col].min()}") # ✅ Doğru girinti
-            print(f" Max: {meta_data_df[col].max()}") # ✅ Doğru girinti
-            print(f" Mean: {meta_data_df[col].mean():.2f}") # ✅ Doğru girinti
-    # 4. Sadece Class sütunundaki boş değerleri 'nan' yap, diğerlerine dokunma
-    print("--- Sadece Class Sütunu Düzenleniyor ---")
-    # Class sütunundaki boş değerleri 'nan' yap
-    # Doğru kod ✅
+        print(f"\n{col}:")
+        print(f" Data type: {meta_data_df[col].dtype}") 
+        print(f" Missing values: {meta_data_df[col].isna().sum()}") 
+        print(f" Number of unique values: {meta_data_df[col].nunique()}") 
+        print(f" First 10 value counts: {meta_data_df[col].value_counts().head(10).to_dict()}") 
+
+        # Additional statistics for numeric columns
+        if pd.api.types.is_numeric_dtype(meta_data_df[col]): 
+            print(f" Min: {meta_data_df[col].min()}") 
+            print(f" Max: {meta_data_df[col].max()}") 
+            print(f" Mean: {meta_data_df[col].mean():.2f}") 
+
+    # Only modify missing values in the 'Class' column, leave others unchanged
+    print("--- Adjusting Only the Class Column ---")
+
     if 'Class' in meta_data_df.columns:
-        print("Class sütunu düzenleniyor...")
-        print(f"Orijinal değerler: {meta_data_df['Class'].value_counts().head()}")
-        # Boş değerleri 'nan' yap
+        print("Modifying Class column...")
+        print(f"Original values: {meta_data_df['Class'].value_counts().head()}")
+
+        # Replace missing values with 'nan'
         meta_data_df['Class'] = meta_data_df['Class'].fillna('nan')
-        print(f"Düzenleme sonrası değerler: {meta_data_df['Class'].value_counts().head()}")
-        print("Diğer sütunlar olduğu gibi bırakıldı.")
-    # 5. Hazırlanan Pandas DataFrame'i Hail Table'a dönüştür ('types' argümanı olmadan)
+
+        print(f"Values after modification: {meta_data_df['Class'].value_counts().head()}")
+        print("Other columns remain unchanged.")
+
+    # Convert the prepared Pandas DataFrame into a Hail Table
     pheno_table = hl.Table.from_pandas(meta_data_df, key='formatted_sample_id')
 
-    print("\n--- Hail Fenotip Tablosu Oluşturuldu ve Tipleri Kontrol Edildi (İlk 5 satır) ---")
+    print("\n--- Hail Phenotype Table Created and Types Checked (First 5 Rows) ---")
     pheno_table.show(192)
 
-    # BURASI EN KRİTİK KISIM!
+    # Annotate the MatrixTable with phenotype data
     final_mt_with_pheno = result.annotate_cols(
-    pheno = pheno_table[result.s_corrected] # Düzeltilmiş ID'leri kullan
+        pheno = pheno_table[result.s_corrected] 
     )
 
-    # 7. Son olarak, 'case' ve 'control' etiketlerini ata
-    # Artık `final_mt_with_pheno` tablosundaki `pheno` alanının dolu olup olmadığını kontrol edebiliriz
+    # Finally, assign 'case' and 'control' labels
     final_mt_with_case_control = final_mt_with_pheno.annotate_cols(
-    case_control_status = hl.if_else(
-    hl.is_defined(final_mt_with_pheno.pheno),
-    'case',
-    'control'
+        case_control_status = hl.if_else(
+            hl.is_defined(final_mt_with_pheno.pheno),
+            'case',
+            'control'
+        )
     )
-    )
+
 
     return (final_mt_with_case_control,)
 
@@ -137,161 +145,202 @@ def _(final_mt_with_case_control):
 
 
 @app.cell
-def _(PCA, StandardScaler, final_mt_with_case_control, np, pd, plt, sns):
-    # Tüm PCA kodunu tek bir marimo hücresine koy
-    # (Gerekiyorsa, `pd`, `np`, `final_mt_with_case_control` gibi değişkenleri de aynı hücrede tanımla)
+def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
+    # Compute PCA (first 2 components)
+    eigenvalues, scores, loadings = hl.hwe_normalized_pca(final_mt_with_case_control.GT, k=2)
 
-    print("--- Her Değişken İçin Ayrı Ayrı PCA Analizi ---")
+    # Add case/control information to the scores Table
+    scores = scores.annotate(case_control_status=final_mt_with_case_control.cols()[scores.s_corrected].case_control_status)
 
-    # Case örneklerini filtrele (sadece case'lerde PCA yap)
-    case_samples = final_mt_with_case_control.filter_cols(
-        final_mt_with_case_control.case_control_status == 'case'
+    # Convert to Pandas
+    scores_pd = scores.to_pandas()
+
+    # Extract PC1 and PC2 columns
+    scores_pd['PC1'] = scores_pd['scores'].apply(lambda x: x[0])
+    scores_pd['PC2'] = scores_pd['scores'].apply(lambda x: x[1])
+
+    # Scatter plot for PCA
+    plt.figure(figsize=(8,6))
+    for label, color in [("case", "red"), ("control", "blue")]:
+        subset = scores_pd[scores_pd['case_control_status'] == label]
+        plt.scatter(subset['PC1'], subset['PC2'], label=label.capitalize(), alpha=0.7, c=color)
+
+    plt.xlabel("PC1")
+    plt.ylabel("PC2")
+    plt.legend()
+    plt.title("PCA: Case vs Control")
+    plt.show()
+
+
+    # Create a Case-only MatrixTable
+    case_mt = final_mt_with_case_control.filter_cols(final_mt_with_case_control.case_control_status == "case")
+
+    # Convert column metadata into a Table
+    case_cols_ht = case_mt.cols()
+
+    # Select phenotype fields of interest
+    case_cols_ht = case_cols_ht.select(
+        **{f: case_cols_ht.pheno[f] for f in [
+            'CAA_status',
+            'Diagnostic_Age_Status',
+            'Sequelae_Status',
+            'Family_History_Status',
+            'Consanguineous_marriage_status',
+            'Degree_of_CM',
+            'Family_history_of_CHD_status',
+            'KD_in_siblings_status'
+        ]}
     )
 
-    case_count = case_samples.count_cols()
-    print(f"Case örnek sayısı: {case_count}")
-    if case_count == 0:
-        print("Hiç case örneği bulunamadı!")
-        # return None
+    # Convert to Pandas DataFrame (GERÇEK VERİ)
+    df = case_cols_ht.to_pandas()
 
-    # ... (case_df'yi oluşturan kod burada devam etmeli)
-    case_pheno = case_samples.pheno.collect()
-    case_df = pd.DataFrame(case_pheno)
-    print(f"Case meta data shape: {case_df.shape}")
-    print(f"Meta data sütunları: {case_df.columns.tolist()}")
-
-    if case_df is None or case_df.empty:
-        print("Case data bulunamadı!")
-
-    # Sayısal sütunları seç (PCA için)
-    numeric_columns = case_df.select_dtypes(include=[np.number]).columns.tolist()
-    print(f"Sayısal sütunlar: {numeric_columns}")
-
-    pca_results = {}
-    for key in numeric_columns:
-        print(f"\n--- {key} Değişkeni İçin PCA ---")
-        # Veriyi hazırla
-        data = case_df[key].dropna()
-        if len(data) < 2:
-            print(f" {key} için yeterli veri yok (en az 2 değer gerekli)")
-            continue
-        if data.nunique() < 2:
-            print(f" {key} için varyasyon yok (tüm değerler aynı)")
-            continue
-        # Veriyi 2D array'e çevir (PCA için)
-        X = data.values.reshape(-1, 1)
-        # Standardize et
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-        # PCA uygula
-        pca = PCA(n_components=1)
-        X_pca = pca.fit_transform(X_scaled)
-        # Sonuçları sakla
-        pca_results[key] = {
-            'original_data': data,
-            'scaled_data': X_scaled,
-            'pca_data': X_pca,
-            'explained_variance_ratio': pca.explained_variance_ratio_[0],
-            'components': pca.components_[0],
-            'mean': scaler.mean_[0],
-            'scale': scaler.scale_[0]
-        }
-        print(f" Açıklanan varyans oranı: {pca.explained_variance_ratio_[0]:.4f}")
-        print(f" PCA bileşeni: {pca.components_[0]}")
-        print(f" Veri sayısı: {len(data)}")
-        print(f" Ortalama: {scaler.mean_[0]:.2f}")
-        print(f" Standart sapma: {scaler.scale_[0]:.2f}")
-    # --- Belirlenen Değişkenler için PCA Analizi ---
-    print("--- Genel Veride (Hasta ve Kontrol) PCA Analizi Başlıyor ---")
-
-    # Analiz edilecek 0/1 değişkenlerini seç
-    pca_columns = [
-        'CAA_status',
-        'Sequelae_Status',
-        'Family_History_Status',
-        'Sex',
-        'Consanguineous_marriage_status',
-        'Degree_of_CM',
-        'Family_history_of_CHD_status',
-        'KD_in_siblings_status'
+    # Feature list
+    features = [
+        'CAA_status', 'Diagnostic_Age_Status', 'Sequelae_Status',
+        'Family_History_Status', 'Consanguineous_marriage_status',
+        'Degree_of_CM', 'Family_history_of_CHD_status', 'KD_in_siblings_status'
     ]
 
-    # Tüm örnekleri (hem 'case' hem de 'control') içeren bir pandas DataFrame oluştur
-    all_samples_pheno = final_mt_with_case_control.cols().collect()
-    all_samples_df = pd.DataFrame(all_samples_pheno)
-    pca_data = all_samples_df[['pheno'] + ['case_control_status']].dropna()
-    pca_df = pd.DataFrame(pca_data['pheno'].tolist())
-    pca_df['case_control_status'] = pca_data['case_control_status']
+    # Sadece bu kolonları al (gerekirse int'e çevir)
+    pca_data = df[features].astype(int)
 
-    # 'Sex' sütununu 'Male' -> 0, 'Female' -> 1 olarak dönüştür
-    pca_df['Sex'] = pca_df['Sex'].map({'Male': 0, 'Female': 1})
+    # PCA
+    pca = PCA(n_components=2)
+    principal_components = pca.fit_transform(pca_data)
 
-    # Tüm değişkenlerin olduğu DataFrame'i temizle
-    pca_df_all = pca_df.dropna(subset=pca_columns)
-    X_all = pca_df_all[pca_columns].astype(float)
-    y_all_status = pca_df_all['case_control_status']
-    y_all_sex = pca_df_all['Sex']
+    # PCA sonuç DataFrame
+    pca_df = pd.DataFrame(data=principal_components, columns=['PC1', 'PC2'])
 
-    # Veriyi standartlaştır
-    scaler_all = StandardScaler()
-    X_scaled_all = scaler_all.fit_transform(X_all)
+    # Benzersiz noktaları kontrol et
+    unique_points = pca_df.drop_duplicates()
+    print(f"\nNumber of unique PCA points: {len(unique_points)}")
+    print(f"Total number of PCA points: {len(pca_df)}")
 
-    # 2 ana bileşen ile PCA'i uygula
-    pca_all = PCA(n_components=2)
-    X_pca_all = pca_all.fit_transform(X_scaled_all)
+    # Jitter ekle
+    np.random.seed(42)
+    jitter_amount = 0.05 
+    pca_df['PC1_jittered'] = pca_df['PC1'] + np.random.normal(0, jitter_amount, size=len(pca_df))
+    pca_df['PC2_jittered'] = pca_df['PC2'] + np.random.normal(0, jitter_amount, size=len(pca_df))
 
-    # PCA sonuçlarını bir DataFrame'e koy
-    pca_results_df_all = pd.DataFrame(data=X_pca_all, columns=['PC1', 'PC2'])
-    pca_results_df_all['status'] = y_all_status.reset_index(drop=True)
-    pca_results_df_all['sex'] = y_all_sex.reset_index(drop=True)
+    # Scatter plot
+    plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
+    sns.scatterplot(x='PC1_jittered', y='PC2_jittered', data=pca_df, s=70, alpha=0.8)
+    plt.title('PCA Distribution of Cases (Points Separated with Jittering)')
+    plt.xlabel('Principal Component 1')
+    plt.ylabel('Principal Component 2')
+    plt.show()
 
-    # 'status' sütunundaki değerleri daha anlaşılır etiketlere dönüştür
-    pca_results_df_all['status_label'] = pca_results_df_all['status'].map({'case': 'Hasta', 'control': 'Kontrol'})
-    # Diğer 0/1 değerlerini de etiketlere dönüştür
-    pca_results_df_all['family_history_label'] = pca_df_all['Family_History_Status'].map({0.0: 'Yok', 1.0: 'Var'}).reset_index(drop=True)
-    pca_results_df_all['caa_status_label'] = pca_df_all['CAA_status'].map({0.0: 'Yok', 1.0: 'Var'}).reset_index(drop=True)
-    pca_results_df_all['sequelae_status_label'] = pca_df_all['Sequelae_Status'].map({0.0: 'Yok', 1.0: 'Var'}).reset_index(drop=True)
-    pca_results_df_all['degree_of_cm_label'] = pca_df_all['Degree_of_CM'].map({0.0: 'Yok', 1.0: 'Var'}).reset_index(drop=True)
-    pca_results_df_all['kd_in_siblings_label'] = pca_df_all['KD_in_siblings_status'].map({0.0: 'Yok', 1.0: 'Var'}).reset_index(drop=True)
-    pca_results_df_all['consanguineous_marriage_label'] = pca_df_all['Consanguineous_marriage_status'].map({0.0: 'Yok', 1.0: 'Var'}).reset_index(drop=True)
-    pca_results_df_all['sex_label'] = pca_df_all['Sex'].map({0.0: 'Erkek', 1.0: 'Kadın'}).reset_index(drop=True)
-
-    # Açıklanan varyans oranını yazdır
-    print("\n--- PCA Sonuçları ---")
-    print(f"PC1'in açıkladığı varyans oranı: {pca_all.explained_variance_ratio_[0]:.2f}")
-    print(f"PC2'nin açıkladığı varyans oranı: {pca_all.explained_variance_ratio_[1]:.2f}")
-    print(f"Toplam açıklanan varyans: {pca_all.explained_variance_ratio_.sum():.2f}")
-    print(f"Analizdeki toplam örnek sayısı: {len(pca_results_df_all)}")
-
-    # Her bir değişken için ayrı bir kümelenme grafiği çiz
-    plotting_columns = {
-        'status_label': 'Hastalık Durumu',
-        'sex_label': 'Cinsiyet',
-        'family_history_label': 'Aile Geçmişi',
-        'caa_status_label': 'CAA Durumu',
-        'sequelae_status_label': 'Sequelae Durumu',
-        'degree_of_cm_label': 'Akraba Evliliği Derecesi',
-        'kd_in_siblings_label': 'Kardeşlerde Kawasaki',
-        'consanguineous_marriage_label': 'Akraba Evliliği'
-    }
-
-    for plot_col, title in plotting_columns.items():
-        print(f"\n--- {title} Değişkenine Göre Kümelenme ---")
-        plt.figure(figsize=(10, 8))
-        sns.scatterplot(
-            x='PC1', 
-            y='PC2', 
-            hue=plot_col, 
-            data=pca_results_df_all, 
-            palette='deep', 
-            s=100
-        )
-        plt.title(f"Kawasaki Hastalığı: {title} Değişkenine Göre PCA Analizi")
-        plt.xlabel(f"Principal Component 1 ({pca_all.explained_variance_ratio_[0]*100:.2f}%)")
-        plt.ylabel(f"Principal Component 2 ({pca_all.explained_variance_ratio_[1]*100:.2f}%)")
-        plt.grid(True)
+    # Her feature için ayrı scatter
+    for feature in features:
+        plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
+        sns.scatterplot(x='PC1_jittered', y='PC2_jittered', hue=df[feature], data=pca_df, s=70, alpha=0.8, palette='viridis')
+        plt.title(f'PCA by {feature} Status (All Patients Visible)', fontsize=16, fontweight='bold', pad=20)
+        plt.xlabel('Principal Component 1', fontsize=12)
+        plt.ylabel('Principal Component 2', fontsize=12)
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.axhline(0, color='grey', linestyle='--', linewidth=0.8)
+        plt.axvline(0, color='grey', linestyle='--', linewidth=0.8)
+        plt.box(on=True)
+        plt.tight_layout()
         plt.show()
 
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    # Gerekli kütüphaneleri içe aktarıyoruz
+    import pandas as pd
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # NOT: Bu kod, kullanıcının "df" adında bir pandas DataFrame'i olduğunu varsaymaktadır.
+    # Bu DataFrame, aşağıdaki fenotip sütunlarını içermelidir:
+    # 'CAA_status', 'Diagnostic_Age_Status', 'Sequelae_Status',
+    # 'Family_History_Status', 'Consanguineous_marriage_status',
+    # 'Degree_of_CM', 'Family_history_of_CHD_status', 'KD_in_siblings_status'
+    # Eğer bu sütunlarda kategorik (metin) veriler varsa, bu kod çalışmadan önce
+    # sayısal verilere dönüştürülmeleri (örneğin, One-Hot Encoding ile) gereklidir.
+
+    # 1. Adım: Veriyi Ölçeklendirme (Standardization)
+    # PCA'ya başlamadan önce, tüm verilerin aynı ölçekte olması çok önemlidir.
+    # Bu, büyük değerli sütunların analize hakim olmasını engeller.
+    features = [
+        'CAA_status', 'Diagnostic_Age_Status', 'Sequelae_Status',
+        'Family_History_Status', 'Consanguineous_marriage_status',
+        'Degree_of_CM', 'Family_history_of_CHD_status', 'KD_in_siblings_status'
+    ]
+
+    # Sadece PCA için kullanacağımız sütunları seçiyoruz
+    x = df.loc[:, features].values
+
+    # StandardScaler kullanarak veriyi ölçeklendiriyoruz
+    x = StandardScaler().fit_transform(x)
+
+    # 2. Adım: PCA Modelini Oluşturma ve Uygulama
+    # İki ana bileşen (PC1 ve PC2) oluşturmak için PCA'yı kullanıyoruz.
+    # Genellikle ilk iki bileşen, görselleştirme için yeterli olur.
+    pca = PCA(n_components=2)
+
+    # Ölçeklendirilmiş veriye PCA uyguluyoruz
+    principal_components = pca.fit_transform(x)
+
+    # 3. Adım: Sonuçları Pandas DataFrame'ine Dönüştürme
+    # Sonuçları daha kolay analiz ve görselleştirme için bir DataFrame'e koyuyoruz
+    pca_df = pd.DataFrame(data = principal_components, columns = ['PC1', 'PC2'])
+
+    # 4. Adım: Her Bir Fenotip İçin Ayrı Ayrı PCA Sonuçlarını Görselleştirme
+    # Bu adım, her bir fenotipi ana PCA grafiği üzerinde farklı renkte gösterir.
+    for feature in features:
+        plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
+        sns.scatterplot(x='PC1', y='PC2', hue=df[feature], data=pca_df, s=70, alpha=0.8, palette='viridis')
+
+        # Grafiğe başlık ve eksen isimlerini ekliyoruz
+        plt.title(f'{feature} Durumuna Göre PCA', fontsize=16, fontweight='bold', pad=20)
+        plt.xlabel(f'Birincil Bileşen 1 ({pca.explained_variance_ratio_[0]*100:.2f}%)', fontsize=12)
+        plt.ylabel(f'Birincil Bileşen 2 ({pca.explained_variance_ratio_[1]*100:.2f}%)', fontsize=12)
+
+        # Koordinat eksenlerini ve gridi düzenliyoruz
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.axhline(0, color='grey', linestyle='--', linewidth=0.8)
+        plt.axvline(0, color='grey', linestyle='--', linewidth=0.8)
+        plt.box(on=True)
+        plt.tight_layout()
+        plt.show()
+
+    # 5. Adım: Bileşenlerin Ne Kadar Varyansı Açıkladığını Görme
+    # Bu, ilk iki bileşenin orijinal verinin ne kadarını temsil ettiğini gösterir.
+    print('----------------------------------------------------')
+    print('Açıklanan Varyans Oranı:')
+    print(pca.explained_variance_ratio_)
+    print(f'Toplam Açıklanan Varyans: {sum(pca.explained_variance_ratio_)*100:.2f}%')
+    print('----------------------------------------------------')
+    ```eof
+
+    """
+    )
+    return
+
+
+@app.cell
+def _(final_mt_with_case_control):
+    final_mt_with_case_control.describe()
+    return
+
+
+@app.cell
+def _(final_mt_with_case_control):
+    final_mt_with_case_control.entries().show()
+    return
+
+
+@app.cell
+def _():
     return
 
 
