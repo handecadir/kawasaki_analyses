@@ -39,7 +39,7 @@ def _(lof_filtered, nadir_filtered_mis):
     print("\n--- Birleştirilmiş MatrixTable ---")
     print("Varyant sayısı, örnek sayısı:", combined_mt.count())
     combined_mt.describe()
-    return
+    return (combined_mt,)
 
 
 @app.cell
@@ -87,15 +87,7 @@ def _(pd):
 
 
 @app.cell
-def _():
-
-
-
-    return
-
-
-@app.cell
-def _(hl, meta_data_df, nadir_filtered, pd):
+def _(combined_mt, hl, meta_data_df, pd):
     # 4. Boş değerleri doldur ve VERİ TİPLERİNİ PANDAS'TA KESİN OLARAK BELİRT
     boolean_columns = [
         'CAA_status', 'Diagnostic_Age_Status', 'Sequelae_Status', 'Family_History_Status',
@@ -132,7 +124,7 @@ def _(hl, meta_data_df, nadir_filtered, pd):
     pheno_table.show(5)
 
     # 6. Fenotip verilerini MatrixTable'a ekle
-    final_mt_with_pheno = nadir_filtered.annotate_cols(pheno = pheno_table[nadir_filtered.s])
+    final_mt_with_pheno = combined_mt.annotate_cols(pheno = pheno_table[combined_mt.s])
 
     print("\n--- MatrixTable'a Eklenmiş Fenotip Bilgileri (İlk 5 Örnek) ---")
     final_mt_with_pheno.cols().show(5)

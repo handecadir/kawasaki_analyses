@@ -25,6 +25,12 @@ def _(hl):
 
 
 @app.cell
+def _(mt):
+    mt.entries().show(10)
+    return
+
+
+@app.cell
 def _(hl):
     def filter_genotypes(
         mt: hl.MatrixTable,
@@ -137,12 +143,6 @@ def _(hl, mt, plot_variant_qc_metrics):
 
 
 @app.cell
-def _(hl, mt, plot_variant_qc_metrics):
-    plot_variant_qc_metrics(hl.variant_qc(mt))
-    return
-
-
-@app.cell
 def _(filtered_mt, hl, plot_variant_qc_metrics):
     plot_variant_qc_metrics(hl.variant_qc(filtered_mt))
     return
@@ -167,8 +167,7 @@ def _(final_mt):
 
 
 @app.cell
-def _(final_mt):
-    final_mt.write("kawasaki_filtered.mt")
+def _():
     return
 
 

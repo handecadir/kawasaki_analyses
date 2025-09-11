@@ -235,20 +235,12 @@ def _(hl, mt_filtered):
 def _(lof_mt):
     lof_consequences_final_mt = lof_mt.annotate_rows(
         gene_symbol = lof_mt.CSQ_struct.SYMBOL,
-        consequence_terms = lof_mt.CSQ_struct.Consequence,
-        polyphen_score = lof_mt.CSQ_struct.PolyPhen,   
-        sift_score = lof_mt.CSQ_struct.SIFT,           
-        is_canonical = lof_mt.CSQ_struct.CANONICAL,    
-        gnomad_genome_AF = lof_mt.CSQ_struct.gnomADg_AF,
-        gnomad_exome_AF  = lof_mt.CSQ_struct.gnomADe_AF
-    )
-
-    lof_consequences_final_mt = lof_consequences_final_mt.select_rows(
-        lof_consequences_final_mt.gene_symbol,
-        lof_consequences_final_mt.consequence_terms,
-        lof_consequences_final_mt.is_canonical,
-        lof_consequences_final_mt.gnomad_genome_AF,
-        lof_consequences_final_mt.gnomad_exome_AF
+        consequence = lof_mt.CSQ_struct.Consequence,
+        is_canonical = lof_mt.CSQ_struct.CANONICAL,
+        gnomad_genome_af = lof_mt.CSQ_struct.gnomADg_AF,
+        gnomad_exome_af  = lof_mt.CSQ_struct.gnomADe_AF,
+        polyphen = lof_mt.CSQ_struct.PolyPhen,
+        sift = lof_mt.CSQ_struct.SIFT
     )
 
     lof_consequences_final_mt.show(10)
@@ -259,7 +251,7 @@ def _(lof_mt):
 
 @app.cell
 def _(lof_consequences_final_mt):
-    lof_consequences_final_mt.rows().show(1000)
+    lof_consequences_final_mt.rows().show(10)
     return
 
 
@@ -283,10 +275,11 @@ def _(hl, mt_filtered):
     missense_mt = missense_mt.annotate_rows(
         gene_symbol = missense_mt.CSQ_struct.SYMBOL,
         consequence = missense_mt.CSQ_struct.Consequence,
+        is_canonical = missense_mt.CSQ_struct.CANONICAL,
+        gnomad_genome_af = missense_mt.CSQ_struct.gnomADg_AF,
+        gnomad_exome_af  = missense_mt.CSQ_struct.gnomADe_AF,
         polyphen = missense_mt.CSQ_struct.PolyPhen,
-        sift = missense_mt.CSQ_struct.SIFT,
-        gnomadg_af = missense_mt.CSQ_struct.gnomADg_AF,
-        gnomade_af = missense_mt.CSQ_struct.gnomADe_AF
+        sift = missense_mt.CSQ_struct.SIFT
     )
 
 
@@ -296,7 +289,7 @@ def _(hl, mt_filtered):
 
 @app.cell
 def _(missense_mt):
-    missense_mt.rows().show(200)
+    missense_mt.rows().show(10)
     return
 
 
@@ -311,8 +304,30 @@ def _(lof_consequences_final_mt, missense_mt):
 
 @app.cell
 def _(lof_consequences_final_mt, missense_mt):
-    missense_mt.rows().export('nadir_filtered_variants.csv')
-    lof_consequences_final_mt.rows().export('nadir_filtered_lof_variants.csv')
+    # Export aligned subset of columns while retaining full schemas in memory
+    miss_rows = missense_mt.rows()
+    miss_rows = miss_rows.select(
+        miss_rows.gene_symbol,
+        miss_rows.consequence,
+        miss_rows.is_canonical,
+        miss_rows.gnomad_genome_af,
+        miss_rows.gnomad_exome_af,
+        miss_rows.polyphen,
+        miss_rows.sift
+    )
+    miss_rows.export('nadir_filtered_variants.csv')
+
+    lof_rows = lof_consequences_final_mt.rows()
+    lof_rows = lof_rows.select(
+        lof_rows.gene_symbol,
+        lof_rows.consequence,
+        lof_rows.is_canonical,
+        lof_rows.gnomad_genome_af,
+        lof_rows.gnomad_exome_af,
+        lof_rows.polyphen,
+        lof_rows.sift
+    )
+    lof_rows.export('nadir_filtered_lof_variants.csv')
     return
 
 
