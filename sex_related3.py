@@ -25,7 +25,10 @@ def _():
 
 @app.cell
 def _(hl):
-    mt = hl.read_matrix_table('/home/ubuntu/kawasaki/kawasaki_filtered.mt')
+    mt = hl.read_matrix_table('kawasaki_filtered.mt')
+    # Mevcut ID'leri string olarak al
+    # ID'leri meta ile eşleştirecek şekilde düzelt (-DNA ekini kaldır)
+    mt = mt.key_cols_by(s=mt.s.replace('-DNA', ''))
     return (mt,)
 
 
@@ -61,7 +64,7 @@ def _(hl, mt):
         sex_df = sex_table.to_pandas()
 
         # First convert True/False to text and then add unknowns
-        sex_df['is_female_str'] = sex_df['is_female'].map({True: 'Women', False: 'Men'})
+        sex_df['is_female_str'] = sex_df['is_female'].map({True: 'Female', False: 'Male'})
         sex_df['is_female_str'].fillna('Unknown', inplace=True)  # Fill NaNs
 
         # Convert 'is_female_str' column to categorical type
@@ -75,7 +78,7 @@ def _(hl, mt):
         print("\n--- Predicted Sex Distribution ---")
         # Use 'is_female_str' column here
         print(sex_df['is_female_str'].value_counts())
-    
+
         return sex_df
 
     # 2. Call estimate_sex_from_x_chromosome_alternative_plot function.
@@ -110,7 +113,7 @@ def _(plt, sex_df, sns):
 @app.cell
 def _(mo, pd):
     # CSV read
-    meta_data_df = pd.read_csv("/home/ubuntu/kawasaki/meta.csv", sep='\t')
+    meta_data_df = pd.read_csv("meta.tsv", sep='\t')
 
     # Marimo'da göster
     mo.ui.table(meta_data_df)

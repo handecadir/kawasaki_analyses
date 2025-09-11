@@ -244,6 +244,27 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
         plt.tight_layout()
         plt.show()
 
+    # Her bir özellik için scatter plot ve kaydetme
+    for feature in features:
+        plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
+        sns.scatterplot(x='PC1_jittered', y='PC2_jittered', hue=df[feature], data=pca_df, s=70, alpha=0.8, palette='viridis')
+        plt.title(f'PCA by {feature} Status (All Patients Visible)', fontsize=16, fontweight='bold', pad=20)
+        plt.xlabel('Principal Component 1', fontsize=12)
+        plt.ylabel('Principal Component 2', fontsize=12)
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.axhline(0, color='grey', linestyle='--', linewidth=0.8)
+        plt.axvline(0, color='grey', linestyle='--', linewidth=0.8)
+        plt.box(on=True)
+        plt.tight_layout()
+    
+        # --- Grafik kaydetme satırı burası! ---
+        # Dosya adını dinamik olarak oluştur
+        file_name = f'pca_plot_{feature}.png'
+        plt.savefig(file_name, dpi=300, bbox_inches='tight')
+        print(f'Grafik başarıyla kaydedildi: {file_name} 🎉')
+    
+        # Grafiği göster
+        plt.show()
     return (scores,)
 
 
