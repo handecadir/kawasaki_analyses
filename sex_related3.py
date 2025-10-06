@@ -46,8 +46,8 @@ def _(hl, mt):
     # --- Sex Estimation Function ---
     def estimate_sex_from_x_chromosome_alternative_plot(
         mt: hl.MatrixTable,
-        female_threshold: float = -0.25,  # If F-stat is below this threshold, call female
-        male_threshold: float = -0.25     # If F-stat is above this threshold, call male
+        female_threshold: float = 0.4,  # If F-stat is below this threshold, call female
+        male_threshold: float = 0.4     # If F-stat is above this threshold, call male
     ):
 
         print("Starting sex estimation...")
@@ -138,6 +138,12 @@ def _(id_column_name, meta_data_df):
     print("\n--- Metadata IDs formatted with 'M_' prefix (First 5 rows) ---")
     print(meta_data_df[['Case Number', 'formatted_sample_id']].head())
 
+    return
+
+
+@app.cell
+def _(meta_data_df):
+    meta_data_df
     return
 
 

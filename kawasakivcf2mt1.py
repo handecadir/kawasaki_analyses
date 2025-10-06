@@ -53,12 +53,6 @@ def _(hl):
 
 @app.cell
 def _(mt):
-    mt.write("kawasaki.mt")
-    return
-
-
-@app.cell
-def _(mt):
     mt.rows().select().show(5)
     return
 
@@ -89,7 +83,30 @@ def _(mt):
 
 
 @app.cell
-def _():
+def _(mt):
+    mt.describe()
+    return
+
+
+@app.cell
+def _(mt):
+    mt.GT.show(2000)
+    return
+
+
+@app.cell
+def _(hl, mt):
+    locus = hl.locus("chr1", 17358, reference_genome="GRCh38")
+    mt_locus = mt.filter_rows(mt.locus == locus)
+    mt_locus.entries().show(n=2000)   # ilk 20 satırı göster
+
+    return
+
+
+@app.cell
+def _(mt):
+    # MatrixTable'i kaydet
+    mt.write("kawasaki.mt", overwrite=True)
     return
 
 

@@ -56,13 +56,14 @@ def _(hl):
             VAF=hl.if_else(mt.DP > 0, mt.AD[1] / mt.DP, 0.0)
         )
 
-        # Filter entries, turning genotypes that fail the check into missing values.
-        filtered_mt = mt_with_vaf.filter_entries(
-            (mt_with_vaf.VAF > min_vaf) & (mt_with_vaf.DP > min_dp)
+       # New filtering condition
+        condition = (
+            (mt_with_vaf.GT.is_hom_ref())  # keep 0/0 always
+            | ( (mt_with_vaf.VAF > min_vaf) & (mt_with_vaf.DP > min_dp) )
         )
+
+        filtered_mt = mt_with_vaf.filter_entries(condition)
         return filtered_mt
-
-
 
 
     def remove_uncalled_variants(mt: hl.MatrixTable) -> hl.MatrixTable:
@@ -91,12 +92,6 @@ def _(hl):
 def _(filter_genotypes, mt):
     filtered_mt = filter_genotypes(mt)
     return (filtered_mt,)
-
-
-@app.cell
-def _(filtered_mt, hl):
-    hl.variant_qc(filtered_mt).row.describe()
-    return
 
 
 @app.cell
@@ -167,12 +162,9 @@ def _(final_mt):
 
 
 @app.cell
-def _():
-    return
-
-
-@app.cell
-def _():
+def _(final_mt):
+    # MatrixTable'i kaydet
+    final_mt.write("kawasaki_filtered.mt", overwrite=True)
     return
 
 
