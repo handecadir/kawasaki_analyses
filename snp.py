@@ -195,23 +195,115 @@ def _(cleaned_mt, hl):
 
 
 @app.cell
-def _(hl, snp_result):
+def _(hl, pd, snp_result):
 
-    rsid_list = ["rs16921209","rs17076896","rs7922552","rs17782904","rs11793049","rs12210919","rs12900413","rs10127456","rs12211370","rs1842579","rs16921209","rs7922552","rs17076896","rs28493229","rs2290692","rs113420705","rs72689236","rs1801274","rs4813003","rs1569723","rs2736340","rs2254546","rs2618476","rs2233152","rs22833188","rs2833195","rs341058","rs767007","rs2517892","rs3118470","rs28493229","rs113420705","rs3755724","rs1800872","rs16944","rs1143627","rs5050","rs7637803","rs1412125","rs899162","rs12041331","rs3789065","rs1568657","rs10129255","rs7604693","rs527409","rs7199343","rs17531088","rs1801274","rs28493229","rs2233152","rs2857151","rs4813003","rs2130392","rs2254546","rs4894410","rs9290065","rs17667932","rs1569723","rs7656244","rs2736340","rs1801274","rs12037447","rs146732504","rs151078858","rs55723436","rs6094136","rs139662037","rs7124405","rs2662865","rs202207863","rs9267431","rs12477499","rs148434007","rs201067154","rs1013532","rs117650853","rs201236531","rs3745213","rs6671847","rs111487401","rs1681087","rs4748329","rs148523506","rs2720378","rs35393613","rs2720378","rs2857602","rs2736340","rs4774175","rs2849322","rs1883832","rs113420414","rs7963257","rs407934","rs1873212","rs1778477","rs1264516","rs3129960","rs7775228","rs2071473","rs79523539","rs3743841","rs73379591","rs10508313"]
+    import odf
+    # .ods dosyasını oku
+    target_df = pd.read_excel("variant.ods")
 
-    snp_filtered = snp_result.filter_rows(
-        hl.any(
-            lambda x: hl.literal(rsid_list).contains(x),
-            snp_result.CSQ_struct.Existing_variation.split(',')
-        )
+    # Kolonları temizle
+    target_df = target_df.rename(columns={
+        'Chromosome/scaffold name': 'chrom',
+        'Chromosome/scaffold position start (bp)': 'pos_start',
+        'Chromosome/scaffold position end (bp)': 'pos_end'
+    })
+
+    # Hail Table'a çevir
+    ht_targets = hl.Table.from_pandas(target_df)
+
+    # int -> str ve 'chr' ekle
+    ht_targets = ht_targets.annotate(
+        chrom = 'chr' + hl.str(ht_targets.chrom),  # 16 -> chr16
+        locus = hl.locus('chr' + hl.str(ht_targets.chrom), ht_targets.pos_start, reference_genome='GRCh38')
     )
 
-    return (snp_filtered,)
+
+
+    # Key atama
+    ht_targets = ht_targets.key_by('locus')
+
+    # SNP MatrixTable'i locus üzerinden key'le
+    snp_final = snp_result.key_rows_by('locus')
+
+    # Filtreleme: sadece Excel'deki loci'leri tut
+    filtered_mt = snp_final.filter_rows(
+        hl.is_defined(ht_targets[snp_final.locus])
+    )
+
+    # Kontrol
+    print("Orijinal varyant sayısı:", snp_final.count_rows())
+    print("Filtrelenmiş varyant sayısı:", filtered_mt.count_rows())
+
+    filtered_mt.rows().show(10)
+    return (filtered_mt,)
 
 
 @app.cell
-def _(snp_filtered):
-    snp_filtered.rows().show(100)
+def _(filtered_mt):
+    filtered_mt.rows().show(10)
+
+    return
+
+
+@app.cell
+def _(filtered_mt):
+    filtered_mt.rows().show(5) 
+    filtered_mt.cols().show(5) 
+
+    return
+
+
+@app.cell
+def _(filtered_mt):
+    # 1️⃣ Entry-level table oluştur
+    ht_flat = filtered_mt.entries()
+
+    # 2️⃣ Sample ve meta data ekle (locus zaten key, eklemeye gerek yok)
+    ht_flat = ht_flat.annotate(
+        Sample_ID = ht_flat.s_corrected,
+        case_control = ht_flat.case_control_status,
+        Record_No = ht_flat.pheno.Record_No,
+        Case_Number = ht_flat.pheno.Case_Number,
+        Class = ht_flat.pheno.Class,
+        CAA_status = ht_flat.pheno.CAA_status,
+        Diagnostic_Age_Status = ht_flat.pheno.Diagnostic_Age_Status,
+        Sequelae_Status = ht_flat.pheno.Sequelae_Status,
+        Family_History_Status = ht_flat.pheno.Family_History_Status,
+        Sex = ht_flat.pheno.Sex,
+        Consanguineous_marriage_status = ht_flat.pheno.Consanguineous_marriage_status,
+        Degree_of_CM = ht_flat.pheno.Degree_of_CM,
+        Age_at_diagnosis_years = ht_flat.pheno.Age_at_diagnosis_years,
+        Family_history_of_CHD_status = ht_flat.pheno.Family_history_of_CHD_status,
+        KD_in_siblings_status = ht_flat.pheno.KD_in_siblings_status,
+        rsid = ht_flat.CSQ_struct.Existing_variation,
+        alleles = ht_flat.alleles,
+        GT = ht_flat.GT,
+        DP = ht_flat.DP,
+        AD = ht_flat.AD
+    )
+
+    # 3️⃣ Select yaparken locus'u yazmaya gerek yok
+    ht_flat = ht_flat.select(
+        'Sample_ID', 'case_control', 'GT', 'DP', 'AD', 'rsid', 'alleles',
+        'Record_No','Case_Number','Class','CAA_status','Diagnostic_Age_Status',
+        'Sequelae_Status','Family_History_Status','Sex','Consanguineous_marriage_status',
+        'Degree_of_CM','Age_at_diagnosis_years','Family_history_of_CHD_status',
+        'KD_in_siblings_status'
+    )
+
+    # 4️⃣ Pandas’a çevir
+    df_final = ht_flat.to_pandas()
+    print(df_final.head(10))
+
+
+    return (df_final,)
+
+
+@app.cell
+def _(df_final):
+    # df_final Pandas dataframe’i CSV olarak kaydet
+    df_final.to_csv('filtered_variants_meta.csv', index=False)
+
     return
 
 

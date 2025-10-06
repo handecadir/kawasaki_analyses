@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.9"
+__generated_with = "0.16.5"
 app = marimo.App(width="medium")
 
 
@@ -70,7 +70,6 @@ def _(pd):
 
     print("\n--- Meta Veri ID'leri 'M_' formatına çevrildi (İlk 5 satır) ---")
     print(meta_data_df[['Case_Number', 'formatted_sample_id']].head())
-
     return (meta_data_df,)
 
 
@@ -126,7 +125,6 @@ def _(hl, meta_data_df, nadir_filtered_mis, pd):
     )
     )
 
-
     return (final_mt_with_case_control,)
 
 
@@ -151,7 +149,7 @@ def _(mo):
 @app.cell
 def _(final_mt_with_case_control, hl):
     # Çıkarılacak örneklerin listesi
-    outliers_and_wrong_sex = ['M_276', 'M_277', 'M_NG3215-1', 'NG3253-1', 'M_36']
+    outliers_and_wrong_sex = ['M_276', 'M_277', 'M_NG3215-1', 'NG3253-1', 'M_36', 'NG2605-1']
 
     # Listeyi Hail literal set'e dönüştürelim
     remove_set = hl.literal(set(outliers_and_wrong_sex))
@@ -163,7 +161,6 @@ def _(final_mt_with_case_control, hl):
 
     print("Önceki kolon sayısı:", final_mt_with_case_control.count_cols())
     print("Temizlenmiş kolon sayısı:", cleaned_mt.count_cols())
-
     return (cleaned_mt,)
 
 
@@ -220,7 +217,6 @@ def _(cleaned_mt, hl):
 
     print("\nEn anlamlı 10 gen burden analizi sonucu:")
     gene_burden_results.show(1000)
-
     return
 
 
