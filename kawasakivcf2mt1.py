@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.9"
+__generated_with = "0.17.7"
 app = marimo.App(width="medium")
 
 
@@ -12,16 +12,14 @@ def _():
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ```
     bcftools merge -m none n7_exome_calls.vcf.gz control_exome_calls.vcf.bgz exome_calls.vcf.bgz |
     bcftools norm -m-any -O  z -o merge.vcf.gz
     ```
 
     Lines   total/split/realigned/skipped:	714050/46419/0/0
-    """
-    )
+    """)
     return
 
 
@@ -46,8 +44,6 @@ def _(hl):
 @app.cell
 def _(hl):
     mt = hl.import_vcf('merge.vep.vcf.gz',reference_genome= "GRCh38", force_bgz=True, array_elements_required=False)
-
-
     return (mt,)
 
 
@@ -72,7 +68,6 @@ def _(mt):
 @app.cell
 def _(mt):
     mt.GT.show()
-
     return
 
 
@@ -99,7 +94,11 @@ def _(hl, mt):
     locus = hl.locus("chr1", 17358, reference_genome="GRCh38")
     mt_locus = mt.filter_rows(mt.locus == locus)
     mt_locus.entries().show(n=2000)   # ilk 20 satırı göster
+    return
 
+
+@app.cell
+def _():
     return
 
 

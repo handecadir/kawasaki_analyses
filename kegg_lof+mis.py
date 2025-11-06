@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.16.5"
+__generated_with = "0.14.9"
 app = marimo.App(width="medium")
 
 
@@ -94,6 +94,8 @@ def _(pd):
 
     print("\n--- Meta Data IDs Formatted with 'M_' Prefix (First 5 Rows) ---")
     print(meta_data_df[['Case_Number', 'formatted_sample_id']].head())
+
+
     return (meta_data_df,)
 
 
@@ -145,6 +147,7 @@ def _(combined_mt, hl, meta_data_df, pd):
             'control'
         )
     )
+
     return (final_mt_with_case_control,)
 
 
@@ -157,7 +160,7 @@ def _(final_mt_with_case_control):
 @app.cell
 def _(final_mt_with_case_control, hl):
     # List of outliers and samples with incorrect sex
-    outliers_and_wrong_sex = ['M_276', 'M_277', 'M_NG3215-1', 'NG3253-1', 'M_36', 'NG2605-1']
+    outliers_and_wrong_sex = ['M_276', 'M_277', 'M_NG3215-1', 'NG3253-1', 'M_36']
 
     # Convert the list to a Hail literal set
     remove_set = hl.literal(set(outliers_and_wrong_sex))
@@ -324,6 +327,7 @@ def _(
     kegg_genes = []
     for g in vegf + Cytokine + toll_like + jak_stat +nod_like + t_cell + il_17 + pi3kakt + mapk + tgf_beta + lit_genes :
         kegg_genes.append(g)
+
     return (kegg_genes,)
 
 
@@ -343,6 +347,7 @@ def _(cleaned_mt, hl, kegg_genes):
 
     # İstersen bu yeni MatrixTable'ı kaydet
     kegg_genes_lofmis.write("kegg_lofmis_variants.mt", overwrite=True)
+
     return (kegg_genes_lofmis,)
 
 
@@ -380,7 +385,7 @@ def _(
 
 @app.cell
 def _(kegg_genes_lofmis):
-    kegg_genes_lofmis.entries().show(400)
+    kegg_genes_lofmis.entries().show(100)
     return
 
 
@@ -415,14 +420,8 @@ def _(hl, kegg_genes_lofmis):
 
 @app.cell
 def _(kegg_genes_lofmis_csq):
-    kegg_genes_lofmis_csq.rows().show(200)
+    kegg_genes_lofmis_csq.rows().show()
     return
-
-
-@app.cell
-def _(hl, kegg_genes_lofmis_csq):
-    kegg_genes_lofmis_csq_filtered = kegg_genes_lofmis_csq.filter_rows(hl.len(kegg_genes_lofmis_csq.filters) == 0)
-    return (kegg_genes_lofmis_csq_filtered,)
 
 
 @app.cell
@@ -431,7 +430,7 @@ def _(
     hl,
     il_17,
     jak_stat,
-    kegg_genes_lofmis_csq_filtered,
+    kegg_genes_lofmis_csq,
     lit_genes,
     mapk,
     nod_like,
@@ -480,235 +479,102 @@ def _(
         "MAPK": mapk,
         "LIT_GENES": lit_genes
     }
-    write_setid_locus(kegg_genes_lofmis_csq_filtered, gene_sets, "plink/kegg_genes_lofmis.SetID")
+
+    write_setid_locus(kegg_genes_lofmis_csq, gene_sets, "plink/kegg_genes_lofmis.SetID")
+
     return
 
 
 @app.cell
-def _(hl):
-    yeni_genotip_matrix = hl.import_vcf(
-        'beni_haila_yukle.split.filtered.vcf.gz',
-        reference_genome="GRCh38",
-        force_bgz=True,
-        # BU PARAMETRE, VCF formatındaki array hatalarını görmezden gelmeyi sağlar.
-        array_elements_required=False 
-    )
-    return (yeni_genotip_matrix,)
-
-
-@app.cell
-def _(hl, kegg_genes_lofmis_csq_filtered, yeni_genotip_matrix):
-
-    eski_matrix = kegg_genes_lofmis_csq_filtered.unfilter_entries()
-    # yeni_genotip_matrix = ...
-
-    yeni_renamed = yeni_genotip_matrix.key_cols_by(s_corrected=yeni_genotip_matrix.s)
-
-    # Faz 2: Eşleştirme (Lookup)
-    # 'yeni_renamed' matrisini sorgula
-    eski_matrix_temp = eski_matrix.annotate_entries(
-         newGT = yeni_renamed.index_entries(
-            eski_matrix.row_key, 
-            eski_matrix.s_corrected 
-        ).GT
-    )
-
-    # Faz 4: Koşullu Güncelleme (Bu kısım zaten doğruydu)
-    guncellenmis_matrix = eski_matrix_temp.annotate_entries(
-         GT = hl.if_else(
-             (eski_matrix_temp.case_control_status == "control") & 
-             hl.is_defined(eski_matrix_temp.newGT),
-
-             eski_matrix_temp.newGT,
-             eski_matrix_temp.GT
-         )
-    )
-
-    final_matrix = guncellenmis_matrix
-    return eski_matrix, final_matrix
-
-
-@app.cell
-def _(final_matrix):
-    final_matrix.entries().export("abc.tsv")
+def _(kegg_genes_lofmis_csq):
+    kegg_genes_lofmis_csq.entries().show(n=100)   # ilk 20 satırı göster
     return
 
 
 @app.cell
-def _(eski_matrix):
-    eski_matrix.describe()
-    return
-
-
-@app.cell
-def _(eski_matrix, final_matrix, hl):
-    # Gerekli MT'lerin tanımlandığını varsayıyoruz: final_matrix, eski_matrix
-
-    # Faz 1, 2, 3 ve 4'ten gelen final_matrix ve eski_matrix kullanılarak
-    # 1, 2, 3 ve 4. Adımlar (Hazırlık, Filtreleme, Tabloya Dönüştürme ve Eşleştirme)
-
-    # 1. Matrisleri Hazırlama ve Kontrol Örneklerini Filtreleme
-    eski_matrix_kontrol = eski_matrix.key_cols_by('s_corrected')
-    final_matrix_kontrol = final_matrix.key_cols_by('s_corrected')
-
-    eski_matrix_kontrol = eski_matrix_kontrol.filter_cols(eski_matrix_kontrol.case_control_status == "control")
-    final_matrix_kontrol = final_matrix_kontrol.filter_cols(final_matrix_kontrol.case_control_status == "control")
-
-    # 2. Performans için Varyant Kümesi Kısıtlamasını KALDIRIYORUZ
-    # Artık tüm varyantlar üzerinde çalışılacak.
-
-    # 3. Final Matrisini Tabloya Dönüştürme
-    final_tablo = final_matrix_kontrol.entries()
-    final_tablo = final_tablo.annotate(GT_Final = final_tablo.GT).drop('GT')
-
-    # Orijinal GT Tablosunu Oluşturma
-    eski_entries = eski_matrix_kontrol.entries()
-    eski_tablo = eski_entries.select(GT_Orijinal = eski_entries.GT) 
-
-    # Anahtarlama ve Eşleştirme (Locus ve s_corrected)
-    eski_tablo_keyed = eski_tablo.key_by('locus', 's_corrected')
-    final_tablo_keyed = final_tablo.key_by('locus', 's_corrected')
-
-    # Eşleştirme (Lookup)
-    karsilastirma_tablosu = final_tablo_keyed.annotate(
-        GT_Orijinal = eski_tablo_keyed[final_tablo_keyed.locus, final_tablo_keyed.s_corrected].GT_Orijinal
-    )
-
-
-    # 4. Sadece Değişen Genotipleri Filtreleme
-    # Filtreleme koşulu: GT_Orijinal ile GT_Final farklı olmalı
-    degisen_gt_tablosu = karsilastirma_tablosu.filter(
-        hl.or_else(hl.str(karsilastirma_tablosu.GT_Orijinal), "") != 
-        hl.or_else(hl.str(karsilastirma_tablosu.GT_Final), "")
-    )
-
-    # 5. Kayıt İçin Gerekli Alanları Hazırlama
-
-    kayit_tablosu = degisen_gt_tablosu.select(
-        # VCF incelemesi için faydalı olan Locus ve Alleles alanlarını ekliyoruz (Alleles VCF'de kritikti)
-        Locus = hl.str(degisen_gt_tablosu.locus.contig) + ":" + hl.str(degisen_gt_tablosu.locus.position),
-        Alleles = hl.str(degisen_gt_tablosu.alleles[0]) + "," + hl.str(degisen_gt_tablosu.alleles[1]),
-        Sample_ID = degisen_gt_tablosu.s_corrected,
-        GT_Orijinal = hl.or_else(hl.str(degisen_gt_tablosu.GT_Orijinal), "Missing"),
-        GT_Final = hl.or_else(hl.str(degisen_gt_tablosu.GT_Final), "Missing")
-    )
-
-    # 6. Dosyaya Yazma İşlemi (TXT/CSV formatında)
-    output_path = 'tum_degisen_kontrol_genotipleri.csv' # Çoğu metin düzenleyici için CSV daha uygundur
-    kayit_tablosu.export(output_path, header=True) 
-
-    print("-" * 70)
-    print(f"✅ TÜM DEĞİŞEN KONTROL GENOTİPLERİ dosyaya kaydedildi.")
-    print(f"Dosya Yolu: {output_path}")
-    print("Bu dosyanın büyüklüğü, değişen genotip sayısına bağlı olacaktır.")
-    print("-" * 70)
-    return
-
-
-@app.cell
-def _(final_matrix):
-    final_matrix.rows().show(200)
-    return
-
-
-@app.cell
-def _(final_matrix, hl):
+def _(hl, kegg_genes_lofmis_csq):
     #familyhistorychd
     hl.export_plink(
-        dataset=final_matrix,
+        dataset=kegg_genes_lofmis_csq,
         output='plink/kegg_genes_lofmis_famhis_chd',          # 1 = male, 2 = female, 0 = unknown
-        pheno=final_matrix.pheno.Family_history_of_CHD_status
+        pheno=kegg_genes_lofmis_csq.pheno.Family_history_of_CHD_status
     )
 
 
     #caa status 
     hl.export_plink(
-        dataset=final_matrix,
+        dataset=kegg_genes_lofmis_csq,
         output='plink/kegg_genes_lofmis_caa',          # 1 = male, 2 = female, 0 = unknown
-        pheno=final_matrix.pheno.CAA_status
+        pheno=kegg_genes_lofmis_csq.pheno.CAA_status
     )
 
     # Diagnostic_Age_Status
     hl.export_plink(
-        dataset=final_matrix,
+        dataset=kegg_genes_lofmis_csq,
         output='plink/kegg_genes_lofmis_diagnostic_age',          # 1 = male, 2 = female, 0 = unknown
-        pheno=final_matrix.pheno.Diagnostic_Age_Status
+        pheno=kegg_genes_lofmis_csq.pheno.Diagnostic_Age_Status
     )
 
     #Sequelae_Status
     hl.export_plink(
-        dataset=final_matrix,
+        dataset=kegg_genes_lofmis_csq,
         output='plink/kegg_genes_lofmis_Sequelae_Status',          # 1 = male, 2 = female, 0 = unknown
-        pheno=final_matrix.pheno.Sequelae_Status
+        pheno=kegg_genes_lofmis_csq.pheno.Sequelae_Status
     )
 
     #Family_History_Status
     hl.export_plink(
-        dataset=final_matrix,
+        dataset=kegg_genes_lofmis_csq,
         output='plink/kegg_genes_lofmis_Family_History_Status',          # 1 = male, 2 = female, 0 = unknown
-        pheno=final_matrix.pheno.Family_History_Status
+        pheno=kegg_genes_lofmis_csq.pheno.Family_History_Status
     )
 
 
     #Consanguineous_marriage_status
     hl.export_plink(
-        dataset=final_matrix,
+        dataset=kegg_genes_lofmis_csq,
         output='plink/kegg_genes_lofmis_Consanguineous_marriage_status',          # 1 = male, 2 = female, 0 = unknown
-        pheno=final_matrix.pheno.Consanguineous_marriage_status
+        pheno=kegg_genes_lofmis_csq.pheno.Consanguineous_marriage_status
     )
 
     #Degree_of_CM
     hl.export_plink(
-        dataset=final_matrix,
+        dataset=kegg_genes_lofmis_csq,
         output='plink/kegg_genes_lofmis_Degree_of_CM',          # 1 = male, 2 = female, 0 = unknown
-        pheno=final_matrix.pheno.Degree_of_CM
+        pheno=kegg_genes_lofmis_csq.pheno.Degree_of_CM
     )
 
     #Age_at_diagnosis_years
     hl.export_plink(
-        dataset=final_matrix,
+        dataset=kegg_genes_lofmis_csq,
         output='plink/kegg_genes_lofmis_Age_at_diagnosis_years',          # 1 = male, 2 = female, 0 = unknown
-        pheno=final_matrix.pheno.Age_at_diagnosis_years
+        pheno=kegg_genes_lofmis_csq.pheno.Age_at_diagnosis_years
     )
 
     #KD_in_siblings_status
     hl.export_plink(
-        dataset=final_matrix,
+        dataset=kegg_genes_lofmis_csq,
         output='plink/kegg_genes_lofmis_KD_in_siblings_status',          # 1 = male, 2 = female, 0 = unknown
-        pheno=final_matrix.pheno.KD_in_siblings_status
+        pheno=kegg_genes_lofmis_csq.pheno.KD_in_siblings_status
     )
+
     return
 
 
 @app.cell
 def _(hl, kegg_genes_lofmis_csq):
-    kegg_genes_lofmis_csq2 = kegg_genes_lofmis_csq.annotate_cols(
-        case_numeric = hl.case()
-            .when(kegg_genes_lofmis_csq.case_control_status == "case", 2)
-            .when(kegg_genes_lofmis_csq.case_control_status == "control", 1)
-            .default(0)
-    )
-
-    hl.export_plink(dataset=kegg_genes_lofmis_csq2,
-        output='plink/kegg_genes_lofmis_case_control',          # 1 = male, 2 = female, 0 = unknown
-        pheno=kegg_genes_lofmis_csq2.case_numeric
-    )
-    return
-
-
-@app.cell
-def _(hl, kegg_genes_lofmis_csq):
-    kegg_genes_lofmis_csq3 = kegg_genes_lofmis_csq.annotate_cols(
-        Sex_numeric = hl.case()
-            .when(kegg_genes_lofmis_csq.pheno.Sex == "male", 1)
-            .when(kegg_genes_lofmis_csq.pheno.Sex == "female", 2)
-            .default(0)
-    )
-
+    #bundaaa sorunnn varrr 
+    #class
     hl.export_plink(
-        dataset=kegg_genes_lofmis_csq3,
-        output='plink/kegg_genes_lofmis_Sex',
-        pheno=kegg_genes_lofmis_csq3.Sex_numeric
+        dataset=kegg_genes_lofmis_csq,
+        output='plink/kegg_genes_lofmis_class',          # 1 = male, 2 = female, 0 = unknown
+        pheno=kegg_genes_lofmis_csq.pheno.Class
+    )
+    #Sex
+    hl.export_plink(
+        dataset=kegg_genes_lofmis_csq,
+        output='plink/kegg_genes_lofmis_Sex',          # 1 = male, 2 = female, 0 = unknown
+        pheno=kegg_genes_lofmis_csq.pheno.Sex
     )
     return
 
