@@ -24,64 +24,33 @@ def _():
 
 @app.cell
 def _(hl):
-    filtered_missense = hl.read_matrix_table('missense.mt')
-    filtered_lof = hl.read_matrix_table('lof_variants.mt')
-
-    print("Missense entry fields:", filtered_missense.entry)
-    print("LoF entry fields:", filtered_lof.entry)
-    return filtered_lof, filtered_missense
+    lof_filtered= hl.read_matrix_table('lof_variants.mt')
+    return (lof_filtered,)
 
 
 @app.cell
-def _(filtered_lof, filtered_missense):
-    # Merge the MatrixTables
-    combined_mt = filtered_missense.union_rows(filtered_lof)  
-    return (combined_mt,)
-
-
-@app.cell
-def _(combined_mt):
-    combined_mt.describe()
+def _(lof_filtered):
+    lof_filtered.describe()
     return
 
 
 @app.cell
-def _(combined_mt, hl):
-    # Count total cases and controls
-    total_cases = combined_mt.aggregate_cols(hl.agg.count_where(combined_mt.case_control_status == 'case'))
-    total_controls = combined_mt.aggregate_cols(hl.agg.count_where(combined_mt.case_control_status == 'control'))
-    print(f"Total number of cases: {total_cases}")
-    print(f"Total number of controls: {total_controls}")
+def _(hl, lof_filtered):
+    total_cases = lof_filtered.aggregate_cols(hl.agg.count_where(lof_filtered.case_control_status == 'case'))
+    total_controls = lof_filtered.aggregate_cols(hl.agg.count_where(lof_filtered.case_control_status == 'control'))
+
+    print(f"Toplam vaka sayısı: {total_cases}")
+    print(f"Toplam kontrol sayısı: {total_controls}")
 
 
-    entries_table = combined_mt.entries().select('gene_symbol', 'case_control_status', 'GT')
-    gene_counts_table = entries_table.group_by(entries_table.gene_symbol).aggregate(
-        n_cases_variants = hl.agg.count_where(
-            (entries_table.case_control_status == 'case') &
-            hl.is_defined(entries_table.GT) &
-            entries_table.GT.is_non_ref()
-        ),
-        n_controls_variants = hl.agg.count_where(
-            (entries_table.case_control_status == 'control') &
-            hl.is_defined(entries_table.GT) &
-            entries_table.GT.is_non_ref()
-        )
+
+    gene_counts_mt = lof_filtered.group_rows_by(lof_filtered.gene_symbol).aggregate(
+        n_cases_variants=hl.agg.count_where(lof_filtered.case_control_status == 'case'),
+        n_controls_variants=hl.agg.count_where(lof_filtered.case_control_status == 'control')
     )
 
-    # Count unique variants per gene
-    rows_table = combined_mt.rows()
-    variants_per_gene = rows_table.group_by(rows_table.gene_symbol).aggregate(
-        n_unique_variants = hl.agg.count()
-    )
 
-    # Set keys for joining
-    variants_per_gene = variants_per_gene.key_by('gene_symbol')
-    gene_counts_table = gene_counts_table.key_by('gene_symbol')
-
-    # Add variant counts to gene_counts_table
-    gene_counts_table = gene_counts_table.annotate(
-        n_unique_variants = variants_per_gene[gene_counts_table.gene_symbol].n_unique_variants
-    )
+    gene_counts_table = gene_counts_mt.entries()
 
     gene_counts_table.show(5)
 
@@ -89,34 +58,28 @@ def _(combined_mt, hl):
     gene_results = gene_counts_table.annotate(
         fisher_result = hl.fisher_exact_test(
             hl.int32(gene_counts_table.n_cases_variants),
-            hl.int32((total_cases * gene_counts_table.n_unique_variants) - gene_counts_table.n_cases_variants),
+            hl.int32(total_cases - gene_counts_table.n_cases_variants),
             hl.int32(gene_counts_table.n_controls_variants),
-            hl.int32((total_controls * gene_counts_table.n_unique_variants) - gene_counts_table.n_controls_variants)
+            hl.int32(total_controls - gene_counts_table.n_controls_variants)
         )
     )
 
-    # Sort results and display 
+
     gene_burden_results = gene_results.order_by(gene_results.fisher_result.p_value)
-    print("\nTop 1000 significant gene burden analysis results:")
+
     gene_burden_results.show(1000)
     return gene_burden_results, gene_counts_table
 
 
 @app.cell
 def _(gene_burden_results):
-    gene_burden_results.show(1000)
+    gene_burden_results.show()
     return
 
 
 @app.cell
 def _(gene_counts_table):
     gene_counts_table.show(1000)
-    return
-
-
-@app.cell
-def _(gene_burden_results):
-    gene_burden_results.describe()
     return
 
 
@@ -135,7 +98,7 @@ def _(gene_burden_results, hl):
     adjusted.show(100)
 
     # Save the Bonferroni-adjusted results to a TSV file
-    adjusted.export('bonferroni_adjusted_results_lofmis.tsv')
+    adjusted.export('bonferroni_adjusted_results_lof.tsv')
     return
 
 
@@ -191,13 +154,13 @@ def _(gene_burden_results, np, plt, sns):
             va='center'                    
         )
 
-    plt.title("Q-Q Plot: Gene Burden Analysis_lofmis", fontsize=14, fontweight='bold')
+    plt.title("Q-Q Plot: Gene Burden Analysis LoF", fontsize=14, fontweight='bold')
     plt.xlabel(r"Expected $-log_{10}(p)$", fontsize=12)
     plt.ylabel(r"Observed $-log_{10}(p)$", fontsize=12)
     plt.legend(loc='upper left')
     plt.grid(True, linestyle=':', alpha=0.4)
 
-    plt.savefig('lofmis_Q-Q Plot_Gene_Burden.png', dpi=300, bbox_inches='tight')
+    plt.savefig('lof_Q-Q_Gene_Burden.png', dpi=300, bbox_inches='tight')
 
     plt.show()
     return

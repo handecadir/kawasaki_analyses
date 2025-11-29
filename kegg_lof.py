@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.16.5"
+__generated_with = "0.17.7"
 app = marimo.App(width="medium")
 
 
@@ -18,16 +18,12 @@ def _():
     hl.init()
     import requests
     import re
-    return hl, mo, pd, re, requests
+    return hl, re, requests
 
 
 @app.cell
 def _(hl):
     lof_filtered= hl.read_matrix_table('lof_variants.mt')
-
-    print("LoF entry fields:", lof_filtered.entry)
-
-    lof_filtered = lof_filtered.key_cols_by(s_corrected=lof_filtered.s.replace('-DNA', ''))
     return (lof_filtered,)
 
 
@@ -38,161 +34,18 @@ def _(lof_filtered):
 
 
 @app.cell
-def _(pd):
-    # TSV dosyasını oku
-    meta_data_df = pd.read_csv("meta.tsv", sep="\t", header=0)
-
-    print("--- Orijinal Sütun İsimleri ---")
-    print(meta_data_df.columns.tolist())
-
-    # 2. Sütun isimlerini temizle ve daha kullanışlı hale getir
-    cleaned_columns_step1 = meta_data_df.columns.str.replace(r'[\(\)\n]', '', regex=True).str.strip().str.replace(' ', '_').str.replace('__', '_')
-    meta_data_df.columns = cleaned_columns_step1
-
-    meta_data_df = meta_data_df.rename(columns={
-    'No': 'Record_No',
-    'Case_Number': 'Case_Number',
-    'Class': 'Class',
-    'CAA': 'CAA_status',
-    'Diagnostic_Age': 'Diagnostic_Age_Status',
-    'Sequelae': 'Sequelae_Status',
-    'Family_History': 'Family_History_Status',
-    'Sex': 'Sex',
-    'Consanguineous_marriage': 'Consanguineous_marriage_status',
-    'Degree_of_C.M.': 'Degree_of_CM',
-    'Age_at_diagnosis_year': 'Age_at_diagnosis_years',
-    'Family_history_of_CHD': 'Family_history_of_CHD_status',
-    'KD_in_siblings': 'KD_in_siblings_status'
-    })
-
-    print("\n--- Temizlenmiş Sütun İsimleri (Son Hali) ---")
-    print(meta_data_df.columns.tolist())
-
-    # 3. 'Case_Number' sütunundaki ID'lerin önüne 'M_' ekleyerek formatla
-    id_column_name = 'Case_Number'
-    meta_data_df['formatted_sample_id'] = 'M_' + meta_data_df[id_column_name].astype(str)
-
-    print("\n--- Meta Veri ID'leri 'M_' formatına çevrildi (İlk 5 satır) ---")
-    print(meta_data_df[['Case_Number', 'formatted_sample_id']].head())
-    return (meta_data_df,)
-
-
-@app.cell
-def _(hl, lof_filtered, meta_data_df, pd):
-    # Doğru kod ✅
-    print("--- Veri Tipleri ve Değerler Detaylı Kontrol ---")
-    print("\nDataFrame Shape:", meta_data_df.shape)
-    print("\nSütun İsimleri:")
-    for col in meta_data_df.columns:
-        print(f"- {col}") # ✅ Doğru girinti
-    print("\n--- Her Sütunun Detaylı Analizi ---")
-    for col in meta_data_df.columns:
-        print(f"\n{col}:") # ✅ Doğru girinti
-        print(f" Veri tipi: {meta_data_df[col].dtype}") # ✅ Doğru girinti
-        print(f" Boş değer sayısı: {meta_data_df[col].isna().sum()}") # ✅ Doğru girinti
-        print(f" Benzersiz değer sayısı: {meta_data_df[col].nunique()}") # ✅ Doğru girinti
-        print(f" İlk 10 değer: {meta_data_df[col].value_counts().head(10).to_dict()}") # ✅ Doğru girinti
-        # Sayısal sütunlar için ek istatistikler
-        if pd.api.types.is_numeric_dtype(meta_data_df[col]): # ✅ Doğru girinti
-            print(f" Min: {meta_data_df[col].min()}") # ✅ Doğru girinti
-            print(f" Max: {meta_data_df[col].max()}") # ✅ Doğru girinti
-            print(f" Mean: {meta_data_df[col].mean():.2f}") # ✅ Doğru girinti
-    # 4. Sadece Class sütunundaki boş değerleri 'nan' yap, diğerlerine dokunma
-    print("--- Sadece Class Sütunu Düzenleniyor ---")
-    # Class sütunundaki boş değerleri 'nan' yap
-    # Doğru kod ✅
-    if 'Class' in meta_data_df.columns:
-        print("Class sütunu düzenleniyor...")
-        print(f"Orijinal değerler: {meta_data_df['Class'].value_counts().head()}")
-        # Boş değerleri 'nan' yap
-        meta_data_df['Class'] = meta_data_df['Class'].fillna('nan')
-        print(f"Düzenleme sonrası değerler: {meta_data_df['Class'].value_counts().head()}")
-        print("Diğer sütunlar olduğu gibi bırakıldı.")
-    # 5. Hazırlanan Pandas DataFrame'i Hail Table'a dönüştür ('types' argümanı olmadan)
-    pheno_table = hl.Table.from_pandas(meta_data_df, key='formatted_sample_id')
-
-    print("\n--- Hail Fenotip Tablosu Oluşturuldu ve Tipleri Kontrol Edildi (İlk 5 satır) ---")
-    pheno_table.show(192)
-
-    # BURASI EN KRİTİK KISIM!
-    final_mt_with_pheno = lof_filtered.annotate_cols(
-    pheno = pheno_table[lof_filtered.s_corrected] # Düzeltilmiş ID'leri kullan
-    )
-
-    # 7. Son olarak, 'case' ve 'control' etiketlerini ata
-    # Artık `final_mt_with_pheno` tablosundaki `pheno` alanının dolu olup olmadığını kontrol edebiliriz
-    final_mt_with_case_control = final_mt_with_pheno.annotate_cols(
-    case_control_status = hl.if_else(
-    hl.is_defined(final_mt_with_pheno.pheno),
-    'case',
-    'control'
-    )
-    )
-    return (final_mt_with_case_control,)
-
-
-@app.cell
-def _(final_mt_with_case_control):
-    # Sadece ilk 100 örneği ve kolonları gösterir
-    final_mt_with_case_control.cols().show(192)
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(
-        r"""
-    --- Aykırı Değerlerin ve yanlış cinsiyet eşleşmesinin Kimlikleri ---
-    'M_276', 'M_277', 'M_NG3215-1', 'NG3253-1', M_36 ,NG2605-1'
-    """
-    )
-    return
-
-
-@app.cell
-def _(final_mt_with_case_control, hl):
-    # Çıkarılacak örneklerin listesi
-    outliers_and_wrong_sex = ['M_276', 'M_277', 'M_NG3215-1', 'NG3253-1', 'M_36','NG2605-1']
-
-    # Listeyi Hail literal set'e dönüştürelim
-    remove_set = hl.literal(set(outliers_and_wrong_sex))
-
-    # final_mt_with_case_control'dan bu örnekleri çıkar
-    cleaned_mt = final_mt_with_case_control.filter_cols(
-        ~remove_set.contains(final_mt_with_case_control.s_corrected)
-    )
-
-    print("Önceki kolon sayısı:", final_mt_with_case_control.count_cols())
-    print("Temizlenmiş kolon sayısı:", cleaned_mt.count_cols())
-    return (cleaned_mt,)
-
-
-@app.cell
-def _(cleaned_mt):
-    # Sadece ilk 100 örneği ve kolonları gösterir
-    cleaned_mt.cols().show(187)
-    return
-
-
-@app.cell
-def _(cleaned_mt):
-    cleaned_mt.describe()
-    return
-
-
-@app.cell
 def _(re, requests):
 
     def get_pathway_gene_symbols(pathway_id):
         """
-        KEGG API'den verilen pathway ID'sine ait gen sembollerini ve pathway adını çeker.
+        Fetches gene symbols and the pathway name for a given pathway ID from the KEGG API.
         """
         url = f"http://rest.kegg.jp/get/{pathway_id}"
         try:
             resp = requests.get(url, timeout=10)
-            resp.raise_for_status()  # Hata kodlarını (4xx, 5xx) yakalamak için
+            resp.raise_for_status()  # To catch error codes (4xx, 5xx)
         except requests.exceptions.RequestException as e:
-            print(f"KEGG API'den '{pathway_id}' için veri alınırken hata oluştu: {e}")
+            print(f"Error occurred while fetching data for '{pathway_id}' from KEGG API: {e}")
             return None, None
 
         text = resp.text
@@ -218,39 +71,34 @@ def _(re, requests):
             if gene_section and line:
                 parts = line.split()
                 if len(parts) >= 2:
-                    # "GENE" satırından sonraki satırlar birden fazla gen içerebiliyor.
-                    # Örneğin: "1234 ABC; 5678 XYZ;"
-                    # Bu yüzden her birini ayıklamamız lazım.
+
                     gene_symbols_on_line = re.findall(r"\s(\S+?);", line)
                     symbols.extend(gene_symbols_on_line)
 
-        # Yinelenen sembolleri kaldır
+
         symbols = list(set(symbols))
         return symbols, pathway_name
 
     def main():
         """
-        Belirtilen pathway ID'leri için gen sembollerini çeker ve sonuçları yazdırır.
+        Fetches gene symbols for the specified pathway IDs and prints the results.
         """
-        # Verilen listeyi düzenledim. H ve map ID'lerini "hsa" olarak değiştirdim
-        # ve liste elemanlarını ayırdım.
-        pathway_ids = ["hsa04370", "hsa04060", "hsa04630", "hsa04620", "hsa04621", "hsa04660", "hsa04657", "hsa04151", "hsa04010", "hsa04350"]
 
-        print("✨ Güncellenen pathway'lerin gen sembolleri ve isimleri: ✨\n")
+        pathway_ids = ["hsa04370", "hsa04060", "hsa04630", "hsa04620", "hsa04621", "hsa04660", "hsa04657", "hsa04151", "hsa04010", "hsa04350","hsa04020","hsa04668","hsa04064"]
+
+        print(" Gene symbols and names of the updated pathways: \n")
 
         for p_id in pathway_ids:
             symbols, name = get_pathway_gene_symbols(p_id)
             if symbols and name:
-                print(f"➡️ **{name} ({p_id})**")
-                print("   Gen sembolleri:", ", ".join(symbols))
-                print("   Toplam gen sayısı:", len(symbols))
+                print(f" **{name} ({p_id})**")
+                print("   Gene symbols:", ", ".join(symbols))
+                print("   Total number of genes:", len(symbols))
                 print("-" * 30)
             elif name is None:
-                print(f"🤔 {p_id} ID'si için KEGG'den veri alınamadı. Atlanıyor.")
+                print(f" Data could not be retrieved from KEGG for ID {p_id}. Skipping.")
                 print("-" * 30)
 
-
-    # Kodu çalıştırmak için
     if __name__ == "__main__":
         main()
     return
@@ -289,16 +137,76 @@ def _():
 
     lit_genes = ["POTED", "ANKRD26", "PSG4", "GTF3C2", "USH2A", "EOMES", "UGT2B7", "HLA-DQB1", "ABCB5", "ZNF610", "HSD17B4", "TRIM66", "LMO7", "PPP1R13B", "NID2", "HNRNPCL2", "HRNR", "MYO7A", "KIR3DL3", "HLA-B",         
     "TNRC6A", "CEMIP", "PREX2", "GATA5", "EFCC1", "ODF3", "F5", "SORCS2", "RP1L1", "MUC3A", "PLOD3", "FAM240A", "KRTAP10-1", "THSD7A","HLA-DRB1", "IL6ST", "IL17RC", "VEGFB", "ITPKC", "CASP3", "ORAI", "MYH11", "SMAD9", "FCRLA", "PTGER4", "IL17F", "CARD11", "SIGLEC10", "FGFR4", "IL31RA", "FNDC1", "MMP8", "FOXN1", "TTI1", "MYH14", "RBP3", "CD36","CIMAP1A", "MYH7B","E2F1"]
+
+    ca_signal = [
+        "NOS2", "PLCB1", "SLC8A3", "VDAC2", "CALM3", "ITPR3", "ARLN", "PHKG2", "CACNA1A", "ORAI1", 
+        "MCU", "ATP2B3", "ADCY1", "IGH", "TACR1", "PPP3CA", "GRIN3B", "HTR2C", "MYLK2", "GRIN2D", 
+        "CHRM2", "MET", "GRIN2B", "F2R", "FGF10", "HTR2A", "FGF18", "PRKACA", "FGF7", "PRKCB", 
+        "VEGFD", "P2RX7", "DRD5", "GRIN1", "CALML3", "CXCR4", "FGF3", "NFATC4", "CYSLTR2", "FLT4", 
+        "VEGFC", "ADRB2", "P2RX4", "VDAC1", "ADCY8", "CACNA1F", "EDNRA", "GRM1", "ADCY9", "CCKBR", 
+        "NOS3", "MYLK4", "FGF17", "CACNA1D", "CHRNA7", "CAMK4", "ERBB4", "GRIN2C", "PLN", "CD38", 
+        "MRLN", "PDGFRA", "PHKA1", "ATP2A3", "SLC25A5", "PLCZ1", "FGF5", "ADCY3", "ATP2B2", "SPHK2", 
+        "ADORA2B", "FGFR3", "PLCB4", "ADCY4", "FGFR4", "PLCG1", "GNAS", "ATP2A1", "FGFR1", "HRH2", 
+        "CALML4", "CASQ1", "STIM1", "GNA14", "AVPR1A", "FGF4", "PDGFA", "CALM2", "PTGER3", "PLCD4", 
+        "FLT1", "FGF6", "PLCD3", "TRDN", "NFATC3", "PHKA2", "ADORA2A", "FGF22", "DRD1", "CAMK1G", 
+        "CACNA1C", "PDGFC", "CACNA1S", "HTR5A", "CACNA1I", "PRKCA", "RET", "GNA11", "OXTR", "PLCD1", 
+        "GRPR", "CCKAR", "ERBB3", "SLC8A1", "FGF1", "AGTR1", "CACNA1E", "PHKG1", "SLC25A31", "ATP2B4", 
+        "PHKB", "SLC25A4", "GNAL", "TACR3", "CHRM1", "EGF", "HRC", "NTSR1", "ITPKA", "PDE1B", 
+        "PDGFRB", "SLC8A2", "GNA15", "SLN", "FGF16", "PPIF", "CASQ2", "BDKRB1", "TRHR", "VEGFB", 
+        "PTAFR", "PPP3R1", "MCOLN2", "PTK2B", "CHRM5", "P2RX5", "ORAI3", "RYR2", "LTB4R2", "EDNRB", 
+        "CALM1", "MST1", "ORAI2", "ADRB3", "SLC25A6", "ADRA1B", "TPCN1", "RYR1", "GRIN3A", "TGFA", 
+        "TNNC2", "ADRA1D", "CHRM3", "ADCY7", "NFATC1", "CACNA1B", "P2RX1", "PLCE1", "ITPR2", "LHCGR", 
+        "MCOLN3", "MYLK", "ITPKB", "TBXA2R", "ERBB2", "FGF9", "GNAQ", "KDR", "CHRFAM7A", "CACNA1H", 
+        "PDE1A", "TACR2", "CAMK2B", "MYLK3", "HRH1", "SPHK1", "P2RX3", "ITPKC", "CACNA1G", "FGF21", 
+        "HGF", "HTR4", "STIM2", "CAMK2G", "CAMK1", "PRKACB", "PLCB2", "FGF19", "VDAC3", "NTRK1", 
+        "AVPR1B", "ATP2A2", "RYR3", "ITPR1", "PPP3R2", "P2RX6", "GRIN2A", "NTRK2", "NTRK3", "MCOLN1", 
+        "CAMK2D", "CAMK1D", "NFATC2", "ADRB1", "HTR2B", "FGFR2", "TPCN2", "ASPH", "PTGER1", "TFEB", 
+        "ATP2B1", "PLCB3", "PPP3CB", "NOS1", "BDKRB2", "ADCY2", "FGF20", "P2RX2", "EGFR", "PLCG2", 
+        "PDGFD", "FGF8", "PTGFR", "HTR7", "GDNF", "CYSLTR1", "PDE1C", "PDGFB", "HTR6", "FGF23", 
+        "FGF2", "GRM5", "PRKCG", "MST1R", "NGF", "ADRA1A", "CALML5", "PPP3CC", "TNNC1", "VEGFA", 
+        "PRKACG", "CAMK2A", "ERLN", "CALML6" ]
+
+
+    tnf_signal = [
+        "MAP3K7", "CREB3L3", "CYLD", "ITCH", "PIK3R3", "TRADD", "MAPK1", "XIAP", "VEGFD", "TAB2", 
+        "IL6", "CXCL10", "VEGFC", "MAP2K6", "FADD", "PIK3CA", "IKBKB", "JUN", "CCL2", "AKT1", 
+        "BIRC3", "MAPK3", "MAP2K4", "MAP2K7", "CX3CL1", "P3R3URF-PIK3R3", "MAP3K8", "RIPK1", "CXCL5", "SOCS3", 
+        "MAPK13", "RIPK3", "RPS6KA4", "TNFRSF1B", "MLKL", "ATF4", "CREB3L4", "LIF", "MMP14", "SELE", 
+        "RHBDF1", "CREB3L2", "PIK3R2", "PIK3CD", "NOD2", "AKT3", "MAP2K1", "MAP3K14", "CASP7", "JAG1", 
+        "EDN1", "ADAM17", "TAB1", "CCL5", "FAS", "CXCL1", "TRAF3", "CHUK", "IL15", "TRAF5", 
+        "ATF6B", "TNF", "IKBKG", "CREB5", "TRAF1", "CSF1", "DAB2IP", "AKT2", "CXCL3", "RPS6KA5", 
+        "CSF2", "MAP2K3", "MAPK9", "RHBDF2", "LTA", "FOS", "IFNB1", "MAPK11", "MAPK8", "CASP10", 
+        "BIRC2", "IL18R1", "TNFRSF1A", "CFLAR", "PTGS2", "BCL3", "MAP3K5", "CXCL2", "DNM1L", "TRAF2", 
+        "CREB3", "PIK3R1", "VCAM1", "MAPK10", "ATF2", "CXCL6", "CREB3L1", "TNFAIP3", "NFKB1", "PIK3CB", 
+        "MAPK12", "TAB3", "RELA", "NFKBIA", "CASP3", "PGAM5", "CEBPB", "IRF1", "ICAM1", "CREB1", 
+        "FRMD8", "MMP9", "MAPK14", "CASP8", "IL1B", "MMP3", "BAG4", "CCL20", "JUNB" ]
+
+
+    nfkb_signal = [
+        "TICAM2", "PRKCQ", "MAP3K7", "CYLD", "MYD88", "CCL21", "EDAR", "IGH", "ERC1", "NFKB2", 
+        "TRADD", "XIAP", "PRKCB", "GADD45B", "IL1R1", "TAB2", "CCL13", "TNFSF13B", "TLR4", "IKBKB", 
+        "CCL4L2", "CSNK2A2", "TRAF6", "GADD45A", "BIRC3", "RIPK1", "SYK", "PPP1R13L", "BCL2L1", "IRAK4", 
+        "CXCL12", "UBE2I", "TNFRSF13C", "CARD10", "CSNK2A1", "ATM", "PARP1", "CARD14", "BLNK", "TNFRSF11A", 
+        "PLAU", "TNFSF14", "MAP3K14", "TAB1", "TRAF5", "CXCL1", "TRAF3", "CHUK", "CD14", "TNF", 
+        "IKBKG", "CCL4L1", "TNFSF11", "GADD45G", "TRAF1", "CD40", "BTK", "CXCL8", "LYN", "PIDD1", 
+        "CXCL3", "LY96", "BCL2", "LTA", "BIRC2", "BCL2A1", "CD40LG", "BCL10", "TNFRSF1A", "LTB", 
+        "ZAP70", "RIGI", "CFLAR", "TICAM1", "PTGS2", "LBP", "CCL4", "TRIM25", "CXCL2", "EDA", 
+        "TRAF2", "LCK", "LTBR", "VCAM1", "EDA2R", "CARD11", "CCL19", "LAT", "NFKB1", "TNFAIP3", 
+        "EDARADD", "RELB", "MALT1", "TAB3", "RELA", "NFKBIA", "PIAS4", "PLCG2", "CSNK2B", "TIRAP", 
+        "IL1B", "IRAK1", "ICAM1", "CSNK2A3", "PLCG1" ]
     return (
         Cytokine,
+        ca_signal,
         il_17,
         jak_stat,
         lit_genes,
         mapk,
+        nfkb_signal,
         nod_like,
         pi3kakt,
         t_cell,
         tgf_beta,
+        tnf_signal,
         toll_like,
         vegf,
     )
@@ -307,38 +215,40 @@ def _():
 @app.cell
 def _(
     Cytokine,
+    ca_signal,
     il_17,
     jak_stat,
     lit_genes,
     mapk,
+    nfkb_signal,
     nod_like,
     pi3kakt,
     t_cell,
     tgf_beta,
+    tnf_signal,
     toll_like,
     vegf,
 ):
     kegg_genes = []
-    for g in vegf + Cytokine + toll_like + jak_stat +nod_like + t_cell + il_17 + pi3kakt + mapk + tgf_beta + lit_genes :
+    for g in vegf + Cytokine + toll_like + jak_stat +nod_like + t_cell + il_17 + pi3kakt + mapk + tgf_beta + lit_genes + ca_signal +tnf_signal + nfkb_signal:
         kegg_genes.append(g)
     return (kegg_genes,)
 
 
 @app.cell
-def _(cleaned_mt, hl, kegg_genes):
-    # Hail'e literal set olarak aktar
+def _(hl, kegg_genes, lof_filtered):
+
 
     kegg_genes_final = hl.literal(set(kegg_genes))
 
-    # MatrixTable'ı sadece VEGF pathway genleriyle filtrele
-    kegg_genes_lof = cleaned_mt.filter_rows(
-        kegg_genes_final.contains(cleaned_mt.gene_symbol)
+
+    kegg_genes_lof = lof_filtered.filter_rows(
+        kegg_genes_final.contains(lof_filtered.gene_symbol)
     )
 
-    print("Orijinal varyant sayısı:", cleaned_mt.count_rows())
-    print("Total pathway varyant sayısı:", kegg_genes_lof.count_rows())
+    print("Original variant number:", lof_filtered.count_rows())
+    print("Total pathway variant number:", kegg_genes_lof.count_rows())
 
-    # İstersen bu yeni MatrixTable'ı kaydet
     kegg_genes_lof.write("kegg_lof_variants.mt", overwrite=True)
     return (kegg_genes_lof,)
 
@@ -346,26 +256,34 @@ def _(cleaned_mt, hl, kegg_genes):
 @app.cell
 def _(
     Cytokine,
+    ca_signal,
     il_17,
     jak_stat,
     lit_genes,
     mapk,
+    nfkb_signal,
+    nod_like,
     pi3kakt,
     t_cell,
     tgf_beta,
+    tnf_signal,
     toll_like,
     vegf,
 ):
     gene_lists = {"vegf": vegf,                                                                                         
     "Cytokine": Cytokine,
     "toll_like": toll_like,
-    "jak_stat +nod_like": jak_stat ,
+    "jak_stat": jak_stat ,
+    "nod_like": nod_like ,
     "t_cell": t_cell,
     "il_17": il_17,
     "pi3kakt": pi3kakt,
     "mapk": mapk,
     "tgf_beta": tgf_beta,
-    "lit_genes": lit_genes}
+    "lit_genes": lit_genes,
+    "ca_signal": ca_signal,
+    "tnf_signal": tnf_signal,
+     "nfkb_signal": nfkb_signal}
     for gene_list in gene_lists:
         print(gene_list)
         print("*"* 100)
@@ -382,60 +300,28 @@ def _(kegg_genes_lof):
 
 
 @app.cell
-def _(hl, kegg_genes_lof):
-    # Since they are in the VEP CSQ, we defined them and saved separately
-    csq_fields = [
-        "Allele","Consequence","IMPACT","SYMBOL","Gene","Feature_type","Feature","BIOTYPE",
-        "EXON","INTRON","HGVSc","HGVSp","cDNA_position","CDS_position","Protein_position",
-        "Amino_acids","Codons","Existing_variation","ALLELE_NUM","DISTANCE","STRAND","FLAGS",
-        "VARIANT_CLASS","MINIMISED","SYMBOL_SOURCE","HGNC_ID","CANONICAL","MANE","MANE_SELECT",
-        "MANE_PLUS_CLINICAL","TSL","APPRIS","CCDS","ENSP","SWISSPROT","TREMBL","UNIPARC",
-        "UNIPROT_ISOFORM","GENE_PHENO","SIFT","PolyPhen","DOMAINS","miRNA","HGVS_OFFSET",
-        "AF","AFR_AF","AMR_AF","EAS_AF","EUR_AF","SAS_AF","gnomADe_AF","gnomADe_AFR_AF",
-        "gnomADe_AMR_AF","gnomADe_ASJ_AF","gnomADe_EAS_AF","gnomADe_FIN_AF","gnomADe_MID_AF",
-        "gnomADe_NFE_AF","gnomADe_REMAINING_AF","gnomADe_SAS_AF","gnomADg_AF","gnomADg_AFR_AF",
-        "gnomADg_AMI_AF","gnomADg_AMR_AF","gnomADg_ASJ_AF","gnomADg_EAS_AF","gnomADg_FIN_AF",
-        "gnomADg_MID_AF","gnomADg_NFE_AF","gnomADg_REMAINING_AF","gnomADg_SAS_AF","MAX_AF",
-        "MAX_AF_POPS","CLIN_SIG","SOMATIC","PHENO","PUBMED","MOTIF_NAME","MOTIF_POS",
-        "HIGH_INF_POS","MOTIF_SCORE_CHANGE","TRANSCRIPTION_FACTORS","am_class","am_pathogenicity"
-    ]
-
-    kegg_genes_lof_csq = kegg_genes_lof.annotate_rows(
-        CSQ_struct = hl.struct(**{
-            field: kegg_genes_lof.info.CSQ[0].split('\|')[i] for i, field in enumerate(csq_fields)
-        })
-    )
-
-    kegg_genes_lof_csq.CSQ_struct.show(5)
-    return (kegg_genes_lof_csq,)
-
-
-@app.cell
-def _(kegg_genes_lof_csq):
-    kegg_genes_lof_csq.rows().show()
-    return
-
-
-@app.cell
 def _(
     Cytokine,
+    ca_signal,
     hl,
     il_17,
     jak_stat,
-    kegg_genes_lof_csq,
+    kegg_genes_lof,
     lit_genes,
     mapk,
+    nfkb_signal,
     nod_like,
     pi3kakt,
     t_cell,
     tgf_beta,
+    tnf_signal,
     toll_like,
     vegf,
 ):
     def write_setid_locus(matrix_table, gene_sets_dict, output_file):
         """
-        Her gen seti için:
-        set adı -> alt alta chr:pos:ref:alt
+        for each gene set:
+        set name -> chr:pos:ref:alt
         """
         rows = matrix_table.rows()
 
@@ -444,135 +330,121 @@ def _(
                 gene_set = set(gene_list)
                 filtered = rows.filter(hl.literal(gene_set).contains(rows.gene_symbol))
 
-                # locus ve alleles’i tuple olarak topla
                 loci_tuples = filtered.aggregate(
                     hl.agg.collect((filtered.locus.contig, filtered.locus.position,
                                     filtered.alleles[0], filtered.alleles[1]))
                 )
 
-                # Python tarafında string oluştur
                 for contig, pos, ref, alt in loci_tuples:
                     if None not in (contig, pos, ref, alt):
                         f.write(f"{set_name} {contig}:{pos}:{ref}:{alt}\n")
 
 
-
-    # Örnek kullanım
     gene_sets = {
         "VEGF": vegf,
         "TGF_BETA": tgf_beta,
-        "PI3KAKT": pi3kakt,
-        "CYTOKINE": Cytokine,
-        "TOLL_LIKE": toll_like,
-        "JAK_STAT": jak_stat,
-        "NOD_LIKE": nod_like,
-        "T_CELL": t_cell,
-        "IL_17": il_17,
+        "PI3K/AKT": pi3kakt,
+        "Cytokine": Cytokine,
+        "TLR": toll_like,
+        "JAK/STAT": jak_stat,
+        "NOD-like": nod_like,
+        "T-Cell": t_cell,
+        "IL-17": il_17,
         "MAPK": mapk,
-        "LIT_GENES": lit_genes
-    }
-
-    write_setid_locus(kegg_genes_lof_csq, gene_sets, "plink/kegg_genes_lof.SetID")
+        "Literature_Genes": lit_genes,
+        "CA": ca_signal,
+        "TNF": tnf_signal,
+        "NFKB": nfkb_signal}
+    write_setid_locus(kegg_genes_lof, gene_sets, "plink/kegg_genes_lof.SetID")
     return
 
 
 @app.cell
-def _(kegg_genes_lof_csq):
-    kegg_genes_lof_csq.entries().show(n=100)   # ilk 20 satırı göster
-    return
-
-
-@app.cell
-def _(hl, kegg_genes_lof_csq):
+def _(hl, kegg_genes_lof):
     #familyhistorychd
     hl.export_plink(
-        dataset=kegg_genes_lof_csq,
-        output='plink/kegg_genes_lof_famhis_chd',          # 1 = male, 2 = female, 0 = unknown
-        pheno=kegg_genes_lof_csq.pheno.Family_history_of_CHD_status
+        dataset=kegg_genes_lof,
+        output='plink/kegg_genes_lof_famhis_chd',          
+        pheno=kegg_genes_lof.pheno.Family_history_of_CHD_status
     )
 
 
     #caa status 
     hl.export_plink(
-        dataset=kegg_genes_lof_csq,
-        output='plink/kegg_genes_lof_caa',          # 1 = male, 2 = female, 0 = unknown
-        pheno=kegg_genes_lof_csq.pheno.CAA_status
+        dataset=kegg_genes_lof,
+        output='plink/kegg_genes_lof_caa',          
+        pheno=kegg_genes_lof.pheno.CAA_status
     )
 
     # Diagnostic_Age_Status
     hl.export_plink(
-        dataset=kegg_genes_lof_csq,
-        output='plink/kegg_genes_lof_diagnostic_age',          # 1 = male, 2 = female, 0 = unknown
-        pheno=kegg_genes_lof_csq.pheno.Diagnostic_Age_Status
+        dataset=kegg_genes_lof,
+        output='plink/kegg_genes_lof_diagnostic_age',          
+        pheno=kegg_genes_lof.pheno.Diagnostic_Age_Status
     )
 
     #Sequelae_Status
     hl.export_plink(
-        dataset=kegg_genes_lof_csq,
-        output='plink/kegg_genes_lof_Sequelae_Status',          # 1 = male, 2 = female, 0 = unknown
-        pheno=kegg_genes_lof_csq.pheno.Sequelae_Status
+        dataset=kegg_genes_lof,
+        output='plink/kegg_genes_lof_Sequelae_Status',          
+        pheno=kegg_genes_lof.pheno.Sequelae_Status
     )
 
     #Family_History_Status
     hl.export_plink(
-        dataset=kegg_genes_lof_csq,
-        output='plink/kegg_genes_lof_Family_History_Status',          # 1 = male, 2 = female, 0 = unknown
-        pheno=kegg_genes_lof_csq.pheno.Family_History_Status
+        dataset=kegg_genes_lof,
+        output='plink/kegg_genes_lof_Family_History_Status',          
+        pheno=kegg_genes_lof.pheno.Family_History_Status
     )
 
 
     #Consanguineous_marriage_status
     hl.export_plink(
-        dataset=kegg_genes_lof_csq,
-        output='plink/kegg_genes_lof_Consanguineous_marriage_status',          # 1 = male, 2 = female, 0 = unknown
-        pheno=kegg_genes_lof_csq.pheno.Consanguineous_marriage_status
+        dataset=kegg_genes_lof,
+        output='plink/kegg_genes_lof_Consanguineous_marriage_status',           
+        pheno=kegg_genes_lof.pheno.Consanguineous_marriage_status
     )
 
     #Degree_of_CM
     hl.export_plink(
-        dataset=kegg_genes_lof_csq,
-        output='plink/kegg_genes_lof_Degree_of_CM',          # 1 = male, 2 = female, 0 = unknown
-        pheno=kegg_genes_lof_csq.pheno.Degree_of_CM
+        dataset=kegg_genes_lof,
+        output='plink/kegg_genes_lof_Degree_of_CM',          
+        pheno=kegg_genes_lof.pheno.Degree_of_CM
     )
 
-    #Age_at_diagnosis_years
-    hl.export_plink(
-        dataset=kegg_genes_lof_csq,
-        output='plink/kegg_genes_lof_Age_at_diagnosis_years',          # 1 = male, 2 = female, 0 = unknown
-        pheno=kegg_genes_lof_csq.pheno.Age_at_diagnosis_years
-    )
 
     #KD_in_siblings_status
     hl.export_plink(
-        dataset=kegg_genes_lof_csq,
-        output='plink/kegg_genes_lof_KD_in_siblings_status',          # 1 = male, 2 = female, 0 = unknown
-        pheno=kegg_genes_lof_csq.pheno.KD_in_siblings_status
+        dataset=kegg_genes_lof,
+        output='plink/kegg_genes_lof_KD_in_siblings_status',         
+        pheno=kegg_genes_lof.pheno.KD_in_siblings_status
     )
     return
 
 
 @app.cell
-def _(hl, kegg_genes_lof_csq):
-    kegg_genes_lof_csq2 = kegg_genes_lof_csq.annotate_cols(
+def _(hl, kegg_genes_lof):
+    kegg_genes_lof_csq2 = kegg_genes_lof.annotate_cols(
         case_numeric = hl.case()
-            .when(kegg_genes_lof_csq.case_control_status == "case", 2)
-            .when(kegg_genes_lof_csq.case_control_status == "control", 1)
-            .default(0)
+            .when(kegg_genes_lof.case_control_status == "case", 1)
+            .when(kegg_genes_lof.case_control_status == "control", 0)
+            .or_missing()  
     )
 
-    hl.export_plink(dataset=kegg_genes_lof_csq2,
-        output='plink/kegg_genes_lof_case_control',          # 1 = male, 2 = female, 0 = unknown
+    hl.export_plink(
+        dataset=kegg_genes_lof_csq2,
+        output='plink/kegg_genes_lof_case_control',
         pheno=kegg_genes_lof_csq2.case_numeric
     )
     return
 
 
 @app.cell
-def _(hl, kegg_genes_lof_csq):
-    kegg_genes_lof_csq3 = kegg_genes_lof_csq.annotate_cols(
+def _(hl, kegg_genes_lof):
+    kegg_genes_lof_csq3 = kegg_genes_lof.annotate_cols(
         Sex_numeric = hl.case()
-            .when(kegg_genes_lof_csq.pheno.Sex == "male", 1)
-            .when(kegg_genes_lof_csq.pheno.Sex == "female", 2)
+            .when(kegg_genes_lof.pheno.Sex == "Male", 1)
+            .when(kegg_genes_lof.pheno.Sex == "Female", 2)
             .default(0)
     )
 
@@ -585,24 +457,41 @@ def _(hl, kegg_genes_lof_csq):
 
 
 @app.cell
-def _(mo):
-    mo.md(
-        r"""
-    kegg_genes_lof_csq = kegg_genes_lof_csq.annotate_cols(
+def _(hl, kegg_genes_lof):
+    #Age_at_diagnosis_years
+    hl.export_plink(
+        dataset=kegg_genes_lof,
+        output='plink/kegg_genes_lof_Age_at_diagnosis_years',          
+        pheno=kegg_genes_lof.pheno.Age_at_diagnosis_years
+    )
+    return
+
+
+@app.cell
+def _(hl, kegg_genes_lof):
+    kegg_genes_lof_csq = kegg_genes_lof.annotate_cols(
         Class_numeric = hl.case()
-            .when(kegg_genes_lof_csq.pheno.Class == "A", 1)
-            .when(kegg_genes_lof_csq.pheno.Class == "AB", 2)
-            .when(kegg_genes_lof_csq.pheno.Class == "ABD", 3)
-            .when(kegg_genes_lof_csq.pheno.Class == "BD", 4)
-            .default(0)   # NaN veya bilinmeyenler için
+            .when(kegg_genes_lof.pheno.Class == "a", 1)
+            .when(kegg_genes_lof.pheno.Class == "b", 2)
+            .when(kegg_genes_lof.pheno.Class == "c", 3)
+            .when(kegg_genes_lof.pheno.Class == "d", 4)
+            .when(kegg_genes_lof.pheno.Class == "ab", 5)
+            .when(kegg_genes_lof.pheno.Class == "ac", 6)
+            .when(kegg_genes_lof.pheno.Class == "ad", 7)
+            .when(kegg_genes_lof.pheno.Class == "bc", 8)
+            .when(kegg_genes_lof.pheno.Class == "bd", 9)
+            .when(kegg_genes_lof.pheno.Class == "cd", 10)
+            .when(kegg_genes_lof.pheno.Class == "abc", 11)
+            .when(kegg_genes_lof.pheno.Class == "abd", 12)
+            .when(kegg_genes_lof.pheno.Class == "bcd", 13)
+            .when(kegg_genes_lof.pheno.Class == "abcd", 14)
+            .default(hl.null(hl.tint32))   
     )
 
     hl.export_plink(
         dataset=kegg_genes_lof_csq,
         output='plink/kegg_genes_lof_Class',
         pheno=kegg_genes_lof_csq.Class_numeric
-    )
-    """
     )
     return
 

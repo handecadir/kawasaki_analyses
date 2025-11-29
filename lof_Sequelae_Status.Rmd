@@ -1,0 +1,105 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-11-24"
+---
+
+
+```{r}
+library(SKAT)
+library(ggplot2)
+library(dplyr)
+library(forcats)
+```
+
+```{r}
+# SetID dosyasını oku
+setid <- read.table("./kawasaki/plink/kegg_genes_lof.SetID", stringsAsFactors = FALSE)
+colnames(setid) <- c("Pathway", "SNP")  # artık gene yerine pathway yazabiliriz
+
+# Aynı SNP varsa sadece ilkini bırak
+setid_unique <- setid[!duplicated(setid$SNP), ]
+
+# Temiz dosyayı yaz
+write.table(setid_unique, "./kawasaki/plink/kegg_genes_lof_clean.SetID",
+            quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")
+
+```
+
+```{r}
+File.Bed = "./kawasaki/plink/kegg_genes_lof_Sequelae_Status.bed"
+File.Bim = "./kawasaki/plink/kegg_genes_lof_Sequelae_Status.bim"
+File.Fam = "./kawasaki/plink/kegg_genes_lof_Sequelae_Status.fam"
+File.SetID = "./kawasaki/plink/kegg_genes_lof_clean.SetID"
+File.SSD = "./kawasaki/plink/kegg_genes_lof_Sequelae_Status.SSD"
+File.Info = "./kawasaki/plink/kegg_genes_lof_Sequelae_Status.SSD.info"
+```
+
+```{r}
+Generate_SSD_SetID(File.Bed,File.Bim,File.Fam,File.SetID,File.SSD,File.Info)
+```
+
+```{r}
+FAM = Read_Plink_FAM(File.Fam, Is.binary=FALSE)
+y = FAM$Phenotype
+```
+
+```{r}
+SSD.INFO = Open_SSD(File.SSD, File.Info)
+SSD.INFO$nSample
+obj = SKAT_Null_Model(y ~ 1, out_type = "D")
+SSD.INFO$nSets
+out = SKAT.SSD.All(SSD.INFO, obj)
+```
+
+
+
+```{r}
+out_df <- out$results
+
+all_pathways_sorted <- out_df %>%
+  filter(!is.na(P.value)) %>%
+  mutate(SetID_ordered = fct_reorder(SetID, P.value, .desc = TRUE))
+
+if (nrow(all_pathways_sorted) > 0) {
+  
+  plot_all_pathways <- ggplot(all_pathways_sorted, aes(x = SetID_ordered, y = P.value)) +
+    
+    geom_col(fill = "steelblue") +
+    
+    geom_text(
+      aes(label = sprintf("%.4e", P.value)), 
+      hjust = -0.1, 
+      size = 3
+    ) +
+    
+    geom_text(
+      data = filter(all_pathways_sorted, P.value < 0.05),
+      aes(label = "*"),
+      hjust = -6,    
+      vjust = 0.75, 
+      size = 8      
+    ) +
+    
+    scale_y_continuous(expand = expansion(mult = c(0, 0.30))) +
+    
+    coord_flip() + 
+    labs(
+      title = "Pathway p-Values:LoF Sequelae Status",
+      x = "Pathway",
+      y = "p-Value"
+    ) +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text.y = if(nrow(all_pathways_sorted) > 50) element_text(size = 6) else element_text(size = 9),
+      legend.position = "none"
+    )
+  
+  print(plot_all_pathways)
+  
+  ggsave("skat_lof_Sequelae_Status.png", plot = plot_all_pathways, width = 10, height = max(7, nrow(all_pathways_sorted) * 0.15))
+  
+}
+```
+
+

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.9"
+__generated_with = "0.17.7"
 app = marimo.App(width="medium")
 
 
@@ -15,17 +15,14 @@ def _():
     hl.init()
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
-    return PCA, hl, np, pd, plt, sns
+    from scipy.stats import chi2
+    from matplotlib.patches import Ellipse
+    return Ellipse, PCA, chi2, hl, np, pd, plt, sns
 
 
 @app.cell
 def _(hl):
-    # We saved the result already, so use this to open it directly
     result = hl.read_matrix_table('kawasaki_filtered.mt')
-
-    # Adjust to match IDs with metadata (remove the '-DNA' suffix)
-    result = result.key_cols_by(s_corrected=result.s.replace('-DNA', ''))
-
     return (result,)
 
 
@@ -36,126 +33,20 @@ def _(result):
 
 
 @app.cell
-def _(pd):
-    # Read the TSV file
-    meta_data_df = pd.read_csv("meta.tsv", sep="\t", header=0)
-
-    print("--- Original Column Names ---")
-    print(meta_data_df.columns.tolist())
-
-    # Clean column names to make them more usable
-    cleaned_columns_step1 = meta_data_df.columns.str.replace(r'[\(\)\n]', '', regex=True).str.strip().str.replace(' ', '_').str.replace('__', '_')
-    meta_data_df.columns = cleaned_columns_step1
-
-    meta_data_df = meta_data_df.rename(columns={
-        'No': 'Record_No',
-        'Case_Number': 'Case_Number',
-        'Class': 'Class',
-        'CAA': 'CAA_status',
-        'Diagnostic_Age': 'Diagnostic_Age_Status',
-        'Sequelae': 'Sequelae_Status',
-        'Family_History': 'Family_History_Status',
-        'Sex': 'Sex',
-        'Consanguineous_marriage': 'Consanguineous_marriage_status',
-        'Degree_of_C.M.': 'Degree_of_CM',
-        'Age_at_diagnosis_year': 'Age_at_diagnosis_years',
-        'Family_history_of_CHD': 'Family_history_of_CHD_status',
-        'KD_in_siblings': 'KD_in_siblings_status'
-    })
-
-    print("\n--- Cleaned Column Names (Final Version) ---")
-    print(meta_data_df.columns.tolist())
-
-    # Format the IDs in the 'Case_Number' column by adding the prefix 'M_'
-    id_column_name = 'Case_Number'
-    meta_data_df['formatted_sample_id'] = 'M_' + meta_data_df[id_column_name].astype(str)
-
-    print("\n--- Metadata IDs formatted with 'M_' prefix (First 5 rows) ---")
-    print(meta_data_df[['Case_Number', 'formatted_sample_id']].head())
-
-    return (meta_data_df,)
-
-
-@app.cell
-def _(hl, meta_data_df, pd, result):
-
-    print("--- Data Types and Values Detailed Check ---")
-    print("\nDataFrame Shape:", meta_data_df.shape)
-
-    print("\nColumn Names:")
-    for col in meta_data_df.columns:
-        print(f"- {col}") 
-
-    print("\n--- Detailed Analysis of Each Column ---")
-    for col in meta_data_df.columns:
-        print(f"\n{col}:")
-        print(f" Data type: {meta_data_df[col].dtype}") 
-        print(f" Missing values: {meta_data_df[col].isna().sum()}") 
-        print(f" Number of unique values: {meta_data_df[col].nunique()}") 
-        print(f" First 10 value counts: {meta_data_df[col].value_counts().head(10).to_dict()}") 
-
-        # Additional statistics for numeric columns
-        if pd.api.types.is_numeric_dtype(meta_data_df[col]): 
-            print(f" Min: {meta_data_df[col].min()}") 
-            print(f" Max: {meta_data_df[col].max()}") 
-            print(f" Mean: {meta_data_df[col].mean():.2f}") 
-
-    # Only modify missing values in the 'Class' column, leave others unchanged
-    print("--- Adjusting Only the Class Column ---")
-
-    if 'Class' in meta_data_df.columns:
-        print("Modifying Class column...")
-        print(f"Original values: {meta_data_df['Class'].value_counts().head()}")
-
-        # Replace missing values with 'nan'
-        meta_data_df['Class'] = meta_data_df['Class'].fillna('nan')
-
-        print(f"Values after modification: {meta_data_df['Class'].value_counts().head()}")
-        print("Other columns remain unchanged.")
-
-    # Convert the prepared Pandas DataFrame into a Hail Table
-    pheno_table = hl.Table.from_pandas(meta_data_df, key='formatted_sample_id')
-
-    print("\n--- Hail Phenotype Table Created and Types Checked (First 5 Rows) ---")
-    pheno_table.show(192)
-
-    # Annotate the MatrixTable with phenotype data
-    final_mt_with_pheno = result.annotate_cols(
-        pheno = pheno_table[result.s_corrected] 
-    )
-
-    # Finally, assign 'case' and 'control' labels
-    final_mt_with_case_control = final_mt_with_pheno.annotate_cols(
-        case_control_status = hl.if_else(
-            hl.is_defined(final_mt_with_pheno.pheno),
-            'case',
-            'control'
-        )
-    )
-
-
-    return (final_mt_with_case_control,)
-
-
-@app.cell
-def _(final_mt_with_case_control):
-
-    final_mt_with_case_control.cols().show(192)
+def _(result):
+    result.cols().show(192)
     return
 
 
 @app.cell
-def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
+def _(PCA, hl, np, pd, plt, result, sns):
     # Compute PCA (first 2 components)
-    eigenvalues, scores, loadings = hl.hwe_normalized_pca(final_mt_with_case_control.GT, k=2)
+    eigenvalues, scores, loadings = hl.hwe_normalized_pca(result.GT, k=2)
 
-    # Add case/control information to the scores Table
-    scores = scores.annotate(case_control_status=final_mt_with_case_control.cols()[scores.s_corrected].case_control_status)
+    scores = scores.annotate(case_control_status=result.cols()[scores.s_corrected].case_control_status)
 
-    # Convert to Pandas
     scores_pd = scores.to_pandas()
 
-    # Extract PC1 and PC2 columns
     scores_pd['PC1'] = scores_pd['scores'].apply(lambda x: x[0])
     scores_pd['PC2'] = scores_pd['scores'].apply(lambda x: x[1])
 
@@ -171,11 +62,8 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
     plt.title("PCA: Case vs Control")
     plt.show()
 
+    case_mt = result.filter_cols(result.case_control_status == "case")
 
-    # Create a Case-only MatrixTable
-    case_mt = final_mt_with_case_control.filter_cols(final_mt_with_case_control.case_control_status == "case")
-
-    # Convert column metadata into a Table
     case_cols_ht = case_mt.cols()
 
     # Select phenotype fields of interest
@@ -192,10 +80,8 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
         ]}
     )
 
-    # Convert to Pandas DataFrame (GERÇEK VERİ)
     df = case_cols_ht.to_pandas()
 
-    # Feature list
     features = [
         'CAA_status', 'Diagnostic_Age_Status', 'Sequelae_Status',
         'Family_History_Status', 'Consanguineous_marriage_status',
@@ -211,18 +97,17 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
     # PCA result DataFrame
     pca_df = pd.DataFrame(data=principal_components, columns=['PC1', 'PC2'])
 
-    # Unique points
     unique_points = pca_df.drop_duplicates()
     print(f"\nNumber of unique PCA points: {len(unique_points)}")
     print(f"Total number of PCA points: {len(pca_df)}")
 
-    # Jitter adding
+
     np.random.seed(42)
     jitter_amount = 0.05 
     pca_df['PC1_jittered'] = pca_df['PC1'] + np.random.normal(0, jitter_amount, size=len(pca_df))
     pca_df['PC2_jittered'] = pca_df['PC2'] + np.random.normal(0, jitter_amount, size=len(pca_df))
 
-    # Scatter plot
+
     plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
     sns.scatterplot(x='PC1_jittered', y='PC2_jittered', data=pca_df, s=70, alpha=0.8)
     plt.title('PCA Distribution of Cases (Points Separated with Jittering)')
@@ -230,7 +115,6 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
     plt.ylabel('Principal Component 2')
     plt.show()
 
-    # For every featues scatter
     for feature in features:
         plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
         sns.scatterplot(x='PC1_jittered', y='PC2_jittered', hue=df[feature], data=pca_df, s=70, alpha=0.8, palette='viridis')
@@ -244,7 +128,6 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
         plt.tight_layout()
         plt.show()
 
-    # Her bir özellik için scatter plot ve kaydetme
     for feature in features:
         plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
         sns.scatterplot(x='PC1_jittered', y='PC2_jittered', hue=df[feature], data=pca_df, s=70, alpha=0.8, palette='viridis')
@@ -256,16 +139,135 @@ def _(PCA, final_mt_with_case_control, hl, np, pd, plt, sns):
         plt.axvline(0, color='grey', linestyle='--', linewidth=0.8)
         plt.box(on=True)
         plt.tight_layout()
-    
-        # --- Grafik kaydetme satırı burası! ---
-        # Dosya adını dinamik olarak oluştur
+
+
         file_name = f'pca_plot_{feature}.png'
         plt.savefig(file_name, dpi=300, bbox_inches='tight')
-        print(f'Grafik başarıyla kaydedildi: {file_name} 🎉')
-    
-        # Grafiği göster
+
         plt.show()
-    return (scores,)
+    return scores, scores_pd
+
+
+@app.cell
+def _(np, plt, result, sns):
+    case_mt_sex = result.filter_cols(result.case_control_status == 'case')
+    df_sex = case_mt_sex.cols().flatten().to_pandas()
+
+    sex_mapping = {'Male': 1, 'Female': 2}
+    df_sex['Sex_Numeric'] = df_sex['pheno.Sex'].map(sex_mapping)
+    np.random.seed(42)
+    jitter_strength = 0.15 
+
+    df_sex['Jitter_X'] = df_sex['Sex_Numeric'] + np.random.normal(0, jitter_strength, size=len(df_sex))
+    df_sex['Jitter_Y'] = np.random.normal(0, jitter_strength, size=len(df_sex))
+
+    plt.figure(figsize=(10, 8), facecolor='#f5f5f5')
+
+    sns.scatterplot(
+        x='Jitter_X', 
+        y='Jitter_Y', 
+        hue='pheno.Sex', 
+        data=df_sex, 
+        s=80, 
+        alpha=0.7, 
+        palette={'Male': '#1f77b4', 'Female': '#d62728'}, 
+        edgecolor='black',
+        linewidth=0.5
+    )
+
+    plt.title('Distribution of Sex in Cases', fontsize=16, fontweight='bold', pad=20)
+    plt.xlabel('Sex Category (1=Male, 2=Female)', fontsize=12)
+    plt.ylabel('Random Dispersion', fontsize=12)
+
+    plt.axvline(1, color='grey', linestyle='--', alpha=0.3)
+    plt.axvline(2, color='grey', linestyle='--', alpha=0.3)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.box(on=True)
+    plt.tight_layout()
+
+    plt.savefig('pca_sex.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    return
+
+
+@app.cell
+def _(Ellipse, chi2, np, plt, scores_pd):
+    def calculate_mahalanobis_genomic(x, data):
+        covariance_matrix_g = np.cov(data, rowvar=False)
+        covariance_matrix_inv_g = np.linalg.inv(covariance_matrix_g)
+        mean_dist_g = x - np.mean(data, axis=0)
+        return np.sqrt(np.dot(np.dot(mean_dist_g, covariance_matrix_inv_g), mean_dist_g.T))
+
+    # 2. Calculation
+    # scores_pd is already defined in memory; adding a new column to it
+    pca_coords_all = scores_pd[['PC1', 'PC2']].values
+
+    # Calculate distances
+    scores_pd['mahalanobis_dist_all'] = [calculate_mahalanobis_genomic(x, pca_coords_all) for x in pca_coords_all]
+
+    # 3. Threshold Value (p < 0.01)
+    alpha_val = 0.01
+    df_deg = 2
+    critical_value_g = chi2.ppf((1 - alpha_val), df_deg)
+    threshold_dist_g = np.sqrt(critical_value_g)
+
+    scores_pd['is_outlier_genomic'] = scores_pd['mahalanobis_dist_all'] > threshold_dist_g
+
+    # Print statistics
+    print(f"Total individuals analyzed: {len(scores_pd)}")
+    print(f"Number of outliers detected: {scores_pd['is_outlier_genomic'].sum()}")
+
+    # 4. Visualization
+    plt.figure(figsize=(10, 8))
+
+    # Color map
+    plot_colors = {"case": "red", "control": "blue"}
+
+    # Renamed loop variables: 'status_label' and 'group_subset'
+    for status_label in ["case", "control"]:
+        # Normal data (Inlier)
+        group_subset = scores_pd[(scores_pd['case_control_status'] == status_label) & (~scores_pd['is_outlier_genomic'])]
+        plt.scatter(group_subset['PC1'], group_subset['PC2'], 
+                    c=plot_colors[status_label], 
+                    label=f'{status_label.capitalize()} (Inlier)', 
+                    alpha=0.6, s=30)
+
+        # Outlier data (Outlier) - used 'outlier_subset'
+        outlier_subset = scores_pd[(scores_pd['case_control_status'] == status_label) & (scores_pd['is_outlier_genomic'])]
+        if not outlier_subset.empty:
+            plt.scatter(outlier_subset['PC1'], outlier_subset['PC2'], 
+                        c=plot_colors[status_label], 
+                        label=f'{status_label.capitalize()} (Outlier)', 
+                        marker='x', s=100, linewidth=2)
+
+    # Confidence Ellipse Drawing
+    def draw_ellipse_genomic(x, y, ax, **kwargs):
+        cov = np.cov(x, y)
+        lambda_, v = np.linalg.eig(cov)
+        lambda_ = np.sqrt(lambda_)
+        scale_factor = np.sqrt(chi2.ppf(1 - alpha_val, 2))
+
+        ell = Ellipse(xy=(np.mean(x), np.mean(y)),
+                      width=lambda_[0] * 2 * scale_factor,
+                      height=lambda_[1] * 2 * scale_factor,
+                      angle=np.rad2deg(np.arccos(v[0, 0])), **kwargs)
+        ax.add_patch(ell)
+
+    current_ax = plt.gca()
+    draw_ellipse_genomic(scores_pd['PC1'], scores_pd['PC2'], current_ax, 
+                         edgecolor='black', linestyle='--', 
+                         facecolor='none', linewidth=1.5, 
+                         label='99% Confidence Ellipse')
+
+    plt.xlabel("PC1")
+    plt.ylabel("PC2")
+    plt.legend(loc='best')
+    plt.title("Genomic PCA: Outlier Detection (Unique Vars)")
+    plt.grid(True, linestyle='--', alpha=0.3)
+    plt.show()
+
+    final_outliers_df = scores_pd[scores_pd['is_outlier_genomic']]
+    return
 
 
 @app.cell
@@ -321,32 +323,29 @@ def _(plt, scores):
     plt.legend()
     plt.grid(True)
     plt.show()
-
-    return (outliers,)
+    return
 
 
 @app.cell
-def _(final_mt_with_case_control, hl, outliers):
-    # 1. Convert the IDs of outliers (s_corrected) into a list
-    outlier_ids = outliers['s_corrected'].tolist()
+def _(hl, result):
+    # List of outliers and samples with incorrect sex
+    outliers_and_wrong_sex = ['M_NG3215-1', 'NG3253-1', 'M_36', 'M_NG2605-2','M_277']
 
-    # 2. Convert this list into a set that Hail can use
-    outlier_set = hl.literal(outlier_ids)
+    # Convert the list to a Hail literal set
+    remove_set = hl.literal(set(outliers_and_wrong_sex))
 
-    # 3. Filter out the outliers from the main MatrixTable
-    clean_data = final_mt_with_case_control.filter_cols(
-        ~outlier_set.contains(final_mt_with_case_control.s_corrected)
+    cleaned_mt = result.filter_cols(
+        ~remove_set.contains(result.s_corrected)
     )
 
-    # 4. Check the size of the cleaned dataset
-    print("\n--- Dataset Size Check ---")
-    print(f"Original dataset size (number of samples): {final_mt_with_case_control.count_cols()}")
-    print(f"Cleaned dataset size (number of samples): {clean_data.count_cols()}")
+    print("Number of columns before removal:", result.count_cols())
+    print("Number of columns after removal:", cleaned_mt.count_cols())
+    return (cleaned_mt,)
 
-    # See the IDs of the individuals filtered as outliers
-    print("\n--- Outlier IDs ---")
-    print(outlier_ids)
 
+@app.cell
+def _(cleaned_mt):
+    cleaned_mt.write("kawasaki_filtered_outliers.mt", overwrite=True)
     return
 
 
