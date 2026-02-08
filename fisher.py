@@ -140,7 +140,13 @@ def _(gene_burden_results, hl):
 
 
 @app.cell
-def _(gene_burden_results, np, plt, sns):
+def _():
+    from adjustText import adjust_text
+    return (adjust_text,)
+
+
+@app.cell
+def _(adjust_text, gene_burden_results, np, plt, sns):
     df = gene_burden_results.select(
         gene = gene_burden_results.gene_symbol,
         p_value = gene_burden_results.fisher_result.p_value
@@ -156,15 +162,16 @@ def _(gene_burden_results, np, plt, sns):
     df['observed_logp'] = -np.log10(df['p_value'])
 
     # X-Axis: Expected -log10 p-values
+    # (df.index + 1) / (n + 1) sıralı P-değerleri için beklenen olasılıktır
     df['expected_logp'] = -np.log10((df.index + 1) / (n + 1))
 
-    # Check output
+    # Kontrol çıktısı
     print(f"Total number of genes: {n}")
     print(df.head())
 
     plt.figure(figsize=(10, 8), dpi=150)
 
-
+    # --- 1. Dağılım Grafiği (Scatter Plot) ---
     sns.scatterplot(
         data=df, 
         x='expected_logp', 
@@ -175,29 +182,46 @@ def _(gene_burden_results, np, plt, sns):
         edgecolor=None
     )
 
+    # --- 2. Null Hipotezi Çizgisi ---
     max_val = max(df['expected_logp'].max(), df['observed_logp'].max())
     plt.plot([0, max_val], [0, max_val], color='red', linestyle='--', linewidth=1.5, label='Null Hypothesis')
 
-    top_genes = df.head(10)
+    # --- 3. Gelişmiş Etiketleme (adjustText Kullanımı) ---
+
+    # Gösterilmesini istediğiniz gen sayısını artırın (Örn: En düşük P-değerine sahip 20 gen)
+    num_top_genes = 20 
+    top_genes = df.head(num_top_genes)
+
+    texts = []
     for i, row in top_genes.iterrows():
-        plt.text(
-            x=row['expected_logp'] + 0.2,
-            y=row['observed_logp'],        
-            s=row['gene'],                 
+        # Metin nesnelerini oluşturun ancak konumunu otomatik ayarlamayı adjust_text'e bırakın
+        texts.append(plt.text(
+            x=row['expected_logp'],
+            y=row['observed_logp'],      
+            s=row['gene'],              
             fontsize=10,
             fontweight='bold',
             color='black',
-            ha='left',                     
-            va='center'                    
-        )
+            ha='center',                 
+            va='center'                 
+        ))
 
-    plt.title("Q-Q Plot: Gene Burden Analysis_lofmis", fontsize=14, fontweight='bold')
+    # adjust_text'i çağırarak metinlerin çakışmasını engelleyin
+    # arrowprops: Metinleri noktalarına bağlamak için oklar kullanır
+    adjust_text(texts, 
+                arrowprops=dict(arrowstyle="-", color='black', lw=0.5), 
+                force_points=(0.2, 0.5), # Noktaları metinden biraz uzak tutmaya zorla
+                force_text=(0.5, 0.5))   # Metinleri birbirlerinden uzak tutmaya zorla
+
+    # --- 4. Başlık ve Eksen Etiketleri ---
+    plt.title("Q-Q Plot: Gene Burden Analysis LoF", fontsize=14, fontweight='bold')
     plt.xlabel(r"Expected $-log_{10}(p)$", fontsize=12)
     plt.ylabel(r"Observed $-log_{10}(p)$", fontsize=12)
     plt.legend(loc='upper left')
     plt.grid(True, linestyle=':', alpha=0.4)
 
-    plt.savefig('lofmis_Q-Q Plot_Gene_Burden.png', dpi=300, bbox_inches='tight')
+    # --- 5. SVG Kaydetme ---
+    plt.savefig('lof_Q-Q Plot_Gene_Burden.svg', format='svg', bbox_inches='tight')
 
     plt.show()
     return

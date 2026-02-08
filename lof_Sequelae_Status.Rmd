@@ -13,14 +13,11 @@ library(forcats)
 ```
 
 ```{r}
-# SetID dosyasını oku
 setid <- read.table("./kawasaki/plink/kegg_genes_lof.SetID", stringsAsFactors = FALSE)
-colnames(setid) <- c("Pathway", "SNP")  # artık gene yerine pathway yazabiliriz
+colnames(setid) <- c("Pathway", "SNP") 
 
-# Aynı SNP varsa sadece ilkini bırak
 setid_unique <- setid[!duplicated(setid$SNP), ]
 
-# Temiz dosyayı yaz
 write.table(setid_unique, "./kawasaki/plink/kegg_genes_lof_clean.SetID",
             quote = FALSE, row.names = FALSE, col.names = FALSE, sep="\t")
 
@@ -52,54 +49,12 @@ SSD.INFO$nSets
 out = SKAT.SSD.All(SSD.INFO, obj)
 ```
 
-
-
 ```{r}
-out_df <- out$results
-
-all_pathways_sorted <- out_df %>%
-  filter(!is.na(P.value)) %>%
-  mutate(SetID_ordered = fct_reorder(SetID, P.value, .desc = TRUE))
-
-if (nrow(all_pathways_sorted) > 0) {
-  
-  plot_all_pathways <- ggplot(all_pathways_sorted, aes(x = SetID_ordered, y = P.value)) +
-    
-    geom_col(fill = "steelblue") +
-    
-    geom_text(
-      aes(label = sprintf("%.4e", P.value)), 
-      hjust = -0.1, 
-      size = 3
-    ) +
-    
-    geom_text(
-      data = filter(all_pathways_sorted, P.value < 0.05),
-      aes(label = "*"),
-      hjust = -6,    
-      vjust = 0.75, 
-      size = 8      
-    ) +
-    
-    scale_y_continuous(expand = expansion(mult = c(0, 0.30))) +
-    
-    coord_flip() + 
-    labs(
-      title = "Pathway p-Values:LoF Sequelae Status",
-      x = "Pathway",
-      y = "p-Value"
-    ) +
-    theme_minimal(base_size = 10) +
-    theme(
-      axis.text.y = if(nrow(all_pathways_sorted) > 50) element_text(size = 6) else element_text(size = 9),
-      legend.position = "none"
-    )
-  
-  print(plot_all_pathways)
-  
-  ggsave("skat_lof_Sequelae_Status.png", plot = plot_all_pathways, width = 10, height = max(7, nrow(all_pathways_sorted) * 0.15))
-  
-}
+pathway_summary <- out$results[, c("SetID", "P.value")]
+pathway_summary$Variant <- "LoF"
+write.table(pathway_summary, 
+            file = "./kawasaki/plink/final_lof_Sequelae_Status.txt", 
+            sep = "\t", 
+            row.names = FALSE, 
+            quote = FALSE)
 ```
-
-

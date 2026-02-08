@@ -60,10 +60,12 @@ def _(PCA, hl, np, pd, plt, result, sns):
     plt.ylabel("PC2")
     plt.legend()
     plt.title("PCA: Case vs Control")
+    file_name_case_control = 'pca_plot_case_control.svg'
+    plt.savefig(file_name_case_control, format='svg', bbox_inches='tight')
     plt.show()
 
-    case_mt = result.filter_cols(result.case_control_status == "case")
 
+    case_mt = result.filter_cols(result.case_control_status == "case")
     case_cols_ht = case_mt.cols()
 
     # Select phenotype fields of interest
@@ -141,8 +143,8 @@ def _(PCA, hl, np, pd, plt, result, sns):
         plt.tight_layout()
 
 
-        file_name = f'pca_plot_{feature}.png'
-        plt.savefig(file_name, dpi=300, bbox_inches='tight')
+        file_name = f'pca_plot_{feature}.svg'
+        plt.savefig(file_name, format='svg', bbox_inches='tight')
 
         plt.show()
     return scores, scores_pd
@@ -184,8 +186,7 @@ def _(np, plt, result, sns):
     plt.grid(True, linestyle='--', alpha=0.6)
     plt.box(on=True)
     plt.tight_layout()
-
-    plt.savefig('pca_sex.png', dpi=300, bbox_inches='tight')
+    plt.savefig('pca_sex.svg',format='svg', bbox_inches='tight')
     plt.show()
     return
 
@@ -264,6 +265,8 @@ def _(Ellipse, chi2, np, plt, scores_pd):
     plt.legend(loc='best')
     plt.title("Genomic PCA: Outlier Detection (Unique Vars)")
     plt.grid(True, linestyle='--', alpha=0.3)
+    file_name_outlier = 'pca_outlier_mahalanobis.svg'
+    plt.savefig(file_name_outlier, format='svg', bbox_inches='tight')
     plt.show()
 
     final_outliers_df = scores_pd[scores_pd['is_outlier_genomic']]
@@ -322,8 +325,10 @@ def _(plt, scores):
     plt.ylabel('Principal Component 2 (PC2)', fontsize=12)
     plt.legend()
     plt.grid(True)
+    file_name_threshold = 'pca_outlier_threshold.svg'
+    plt.savefig(file_name_threshold, format='svg', bbox_inches='tight')
     plt.show()
-    return
+    return (outliers,)
 
 
 @app.cell
@@ -341,6 +346,20 @@ def _(hl, result):
     print("Number of columns before removal:", result.count_cols())
     print("Number of columns after removal:", cleaned_mt.count_cols())
     return (cleaned_mt,)
+
+
+@app.cell
+def _(outliers):
+    # 1. Outlier örneklerin tam listesini konsola yazdırmak için:
+    print("Tespit edilen outlier örnekler:")
+    print(outliers)
+
+    # 2. Sadece örnek isimlerini (Sample ID) listelemek için:
+    # Not: Hail'den Pandas'a dönüşümde örnek isimleri genellikle 's' sütununda veya index'te tutulur.
+    # Eğer isimler index ise:
+    print("\nOutlier ID Listesi:")
+    print(outliers.index.tolist())
+    return
 
 
 @app.cell

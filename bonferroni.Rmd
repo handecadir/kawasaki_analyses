@@ -1,0 +1,169 @@
+---
+title: "bonferoni2"
+output: html_document
+date: "2025-12-13"
+editor_options: 
+  chunk_output_type: console
+---
+title: "Untitled"
+output: html_document
+date: "2025-12-02"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(data.table)
+library(ggplot2)
+library(tidyr)
+library(dplyr) 
+```
+
+```{r}
+lof_list <- list(
+  "CAA"                 = "kawasaki/plink/final_lof_caa.txt",
+  "FamHis_CHD"          = "kawasaki/plink/final_lof_famhis_chd.txt",
+  "Case_Control"        = "kawasaki/plink/final_lof_case_control.txt",
+  "Sequelae"            = "kawasaki/plink/final_lof_Sequelae_Status.txt",
+  "Fam_History"         = "kawasaki/plink/final_lof_Family_History_Status.txt",
+  "Siblings"            = "kawasaki/plink/final_lof_KD_in_siblings_status.txt",
+  "Consanguineous"      = "kawasaki/plink/final_lof_Consanguineous_marriage.txt"
+)
+```
+
+```{r}
+data_list <- lapply(lof_list, fread, header = TRUE)
+final_df_lof <- rbindlist(data_list, idcol = "Pathway", fill = TRUE)
+print(head(final_df_lof))
+```
+
+```{r}
+mis_list <- list(
+  "CAA"                 = "kawasaki/plink/final_mis_caa.txt",
+  "FamHis_CHD"          = "kawasaki/plink/final_mis_famhis_chd.txt",
+  "Case_Control"        = "kawasaki/plink/final_mis_case_control.txt",
+  "Sequelae"            = "kawasaki/plink/final_mis_Sequelae_Status.txt",
+  "Fam_History"         = "kawasaki/plink/final_mis_Family_History_Status.txt",
+  "Siblings"            = "kawasaki/plink/final_mis_KD_in_siblings_status.txt",
+  "Consanguineous"      = "kawasaki/plink/final_mis_Consanguineous_marriage_status.txt"
+)
+```
+
+```{r}
+data_list_mis <- lapply(mis_list, fread, header = TRUE)
+final_df_mis <- rbindlist(data_list_mis, idcol = "Pathway", fill = TRUE)
+final_df_combined <- rbindlist(list(final_df_lof, final_df_mis), fill = TRUE)
+head(final_df_combined)
+```
+
+```{r}
+final_df_combined$Bonferroni_Adj <- p.adjust(final_df_combined$P.value, method = "bonferroni")
+final_df_combined <- final_df_combined[order(final_df_combined$Bonferroni_Adj), ]
+significant_results <- subset(final_df_combined, Bonferroni_Adj < 0.05)
+
+print(significant_results)
+```
+
+```{r}
+significant_results$Label <- paste0(significant_results$Pathway, " - ", 
+                                    significant_results$SetID, " (", 
+                                    significant_results$Variant, ")")
+
+plot1 <- ggplot(significant_results, aes(x = Bonferroni_Adj, y = reorder(Label, -Bonferroni_Adj))) +
+  geom_point(color = "red", size = 4) +
+  geom_vline(xintercept = 0.05, linetype = "dashed", color = "grey") +
+  theme_bw() +
+  theme(
+    text = element_text(family = "serif"),
+    panel.grid.major.y = element_line(linetype = "dashed", color = "lightgrey"),
+    axis.text = element_text(color = "black")
+  ) +
+  labs(
+    title = "Significant Associations (Bonferroni < 0.05)",
+    x = "FDR (Bonferroni Adjusted p-value)",
+    y = NULL
+  )
+
+print(plot1)
+
+ggsave(
+  filename = "significant_associations_plot.svg", 
+  plot = plot1, 
+  device = "svg", 
+  width = 10,       
+  height = 8,       
+  dpi = 300 )        
+```
+
+```{r}
+final_df_combined$is_significant <- ifelse(final_df_combined$Bonferroni_Adj < 0.05, "Significant", "Non-Significant")
+
+
+plot2 <- ggplot(final_df_combined, aes(x = Bonferroni_Adj, y = Pathway)) +
+  geom_point(aes(color = is_significant), size = 2) +
+  scale_color_manual(values = c("Significant" = "red", "Non-Significant" = "black")) +
+  facet_grid(SetID ~ Variant, scales = "free_y", space = "free_y") +
+  scale_x_continuous(limits = c(0, 1), breaks = c(0, 0.5, 1)) +
+  theme_bw() +
+  theme(
+    text = element_text(family = "serif", size = 10),
+    strip.text.y = element_text(angle = 0), 
+    strip.background = element_blank(),
+    legend.position = "none",
+    panel.spacing = unit(0.5, "lines")
+  ) +
+  labs(
+    x = "FDR (Bonferroni Adj)",
+    y = "Pathway / Phenotype"
+  )
+print(plot2)
+
+ggsave(
+  filename = "significant_pathway_plot.svg", 
+  plot = plot2, 
+  device = "svg", 
+  width = 10,       
+  height = 8,       
+  dpi = 300         
+)
+```
+
+
+```{r}
+
+comparison_df <- final_df_combined %>%
+  select(Pathway, SetID, Variant, P.value) %>%
+  pivot_wider(names_from = Variant, values_from = P.value) %>%
+  drop_na()
+
+comparison_df <- comparison_df %>%
+  mutate(Dominant_Variant = case_when(
+    LoF < Missense ~ "LoF More Significant",
+    Missense < LoF ~ "Missense More Significant",
+    TRUE ~ "Equal Significance"
+  ))
+
+plot3 <- ggplot(comparison_df, aes(x = -log10(Missense), y = -log10(LoF))) +
+  geom_point(aes(color = Dominant_Variant), alpha = 0.7, size = 2) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey") +
+  scale_color_manual(values = c("LoF More Significant" = "#D55E00", 
+                                "Missense More Significant" = "#0072B2", 
+                                "Equal Significance" = "grey70")) +
+  facet_wrap(~Pathway, scales = "fixed") + 
+  theme_bw() +
+  labs(
+    x = "-log10(P) Missense",
+    y = "-log10(P) LoF",
+    color = "Dominant Type"
+  )
+
+ggsave(
+  filename = "significant_comparison_df_plot.svg", 
+  plot = plot3, 
+  device = "svg", 
+  width = 10,       
+  height = 8,       
+  dpi = 300         
+)
+```
+

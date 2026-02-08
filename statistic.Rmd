@@ -1,0 +1,180 @@
+---
+title: "Untitled"
+output: html_document
+date: "2026-01-11"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(psych)
+library(skimr)
+library(gtsummary)
+library(dplyr)
+library(flextable)
+library(ggplot2)    
+library(logistf)      
+```
+
+```{r}
+data <- read.csv("./kawasaki/filtered_variants_meta.csv",
+                 header = TRUE,
+                 sep = ",",
+                 stringsAsFactors = FALSE)
+
+```
+
+```{r}
+data$GT <- gsub("\\|", "/", data$GT)
+
+binary_vars <- c(
+  "CAA_status",
+  "KD_in_siblings_status",
+  "Sequelae_Status",
+  "Family_History_Status",
+  "Family_history_of_CHD_status",
+  "Consanguineous_marriage_status"
+)
+
+data[binary_vars] <- lapply(data[binary_vars], function(x) {
+  factor(x,
+         levels = c(0, 1),
+         labels = c("No", "Yes"))
+})
+
+data$Diagnostic_Age_Status <- factor(
+  data$Diagnostic_Age_Status,
+  levels = c(0, 1),
+  labels = c(">6 months to <5 years ", "≤6 months or ≥5 years")
+)
+
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+locus_gt_summary <- data %>%
+  group_by(locus, rsid, GT, case_control) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  pivot_wider(
+    names_from = case_control, 
+    values_from = n
+  ) %>%
+  mutate(Total = rowSums(across(any_of(c("case", "control"))), na.rm = TRUE)) %>%
+  mutate(
+    control_pct = (control / Total) * 100,
+    case_pct = (case / Total) * 100,
+    control_display = ifelse(is.na(control), NA_character_, paste0(control, " (", round(control_pct, 2), "%)")),
+    case_display = ifelse(is.na(case), NA_character_, paste0(case, " (", round(case_pct, 2), "%)"))
+  ) %>%
+
+  select(
+    Locus = locus, 
+    RSID = rsid, 
+    Genotype = GT, 
+    `Control n (%)` = control_display, 
+    `Case n (%)` = case_display, 
+    `Total Genotype` = Total
+  ) %>%
+  arrange(Locus, Genotype)
+
+ft <- flextable(locus_gt_summary) %>%
+  colformat_char(na_str = "NA") %>% 
+  colformat_num(na_str = "NA") %>%
+  theme_booktabs() %>%
+  bold(part = "header") %>%
+  align(align = "center", part = "all") %>%
+  autofit()
+
+print(ft)
+save_as_image(ft, path = "locus_genotype_summary_en.svg")
+save_as_docx(ft, path = "locus_genotype_summary_en.docx")
+```
+
+
+
+```{r}
+meta <- read.csv("./kawasaki/meta.tsv", 
+                 header = TRUE, 
+                 sep = "\t", 
+                 stringsAsFactors = FALSE)
+```
+
+```{r}
+remove_vals <- c(39, 80, 88, 102, 161, 262)
+
+meta <- meta[!(meta$Case.Number %in% remove_vals), ]
+
+```
+
+```{r}
+binary_vars <- c(
+  "CAA",
+  "KD.in.siblings",
+  "Sequelae",
+  "Family.History",
+  "Family.history.of.CHD",
+  "Consanguineous.marriage"
+)
+
+meta[binary_vars] <- lapply(meta[binary_vars], function(x) {
+  factor(x,
+         levels = c(0, 1),
+         labels = c("No", "Yes"))
+})
+
+meta$Diagnostic.Age <- factor(
+  meta$Diagnostic.Age,
+  levels = c(0, 1),
+  labels = c(">6 months to <5 years ", "≤6 months or ≥5 years")
+)
+
+```
+
+
+```{r}
+selected_vars <- c("CAA",
+  "KD.in.siblings",
+  "Sequelae",
+  "Family.History",
+  "Family.history.of.CHD",
+  "Consanguineous.marriage",
+  "Sequelae",
+  "Sex",
+  "Degree.of.C.M.",
+  "Diagnostic.Age")
+
+summary_data <- meta %>%
+  select(all_of(selected_vars)) %>%
+  mutate(across(everything(), as.character)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Category") %>%
+  replace_na(list(Category = "NA")) %>%
+  group_by(Variable, Category) %>%
+  summarise(n = n(), .groups = "drop_last") %>%
+  mutate(
+    Total = sum(n), 
+    pct = (n / Total) * 100,
+    display = paste0(n, " (", round(pct, 2), "%)")
+  ) %>%
+  ungroup() %>%
+  select(
+    Variable,
+    Category,
+    `n (%)` = display
+  ) %>%
+  arrange(Variable, Category)
+
+ft <- flextable(summary_data) %>%
+  merge_v(j = "Variable") %>%
+  theme_booktabs() %>%
+  bold(part = "header") %>%
+  align(align = "center", part = "all") %>%
+  align(j = 1, align = "left", part = "all") %>%
+  autofit()
+
+print(ft)
+save_as_image(ft, path = "case_summary_table.svg")
+save_as_docx(ft, path = "case_summary_table.docx")
+```

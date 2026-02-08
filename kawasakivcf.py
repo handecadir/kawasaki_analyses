@@ -57,11 +57,7 @@ def _(mt):
 
 @app.cell
 def _(mt):
-    # Adjust IDs to match metadata (remove the '-DNA' suffix)
     combined_mt = mt.key_cols_by(s_corrected=mt.s.replace('-DNA', ''))
-
-    print("\n--- Combined MatrixTable ---")
-    print("Number of variants and samples:", combined_mt.count())
     combined_mt.describe()
     return (combined_mt,)
 
@@ -74,13 +70,9 @@ def _(combined_mt):
 
 @app.cell
 def _(pd):
-    #Read the TSV file
     meta_data_df = pd.read_csv("meta.tsv", sep="\t", header=0)
-
-    print("--- Original Column Names ---")
     print(meta_data_df.columns.tolist())
 
-    #Clean column names and make them more usable
     cleaned_columns_step1 = meta_data_df.columns.str.replace(r'[\(\)\n]', '', regex=True).str.strip().str.replace(' ', '_').str.replace('__', '_')
     meta_data_df.columns = cleaned_columns_step1
 
@@ -100,14 +92,11 @@ def _(pd):
         'KD_in_siblings': 'KD_in_siblings_status'
         })
 
-    print("\n--- Cleaned Column Names (Final) ---")
     print(meta_data_df.columns.tolist())
 
-    #Format IDs in the 'Case_Number' column by adding 'M_' prefix
     id_column_name = 'Case_Number'
     meta_data_df['formatted_sample_id'] = 'M_' + meta_data_df[id_column_name].astype(str)
 
-    print("\n--- Meta Data IDs Formatted with 'M_' Prefix (First 5 Rows) ---")
     print(meta_data_df[['Case_Number', 'formatted_sample_id']].head())
     return (meta_data_df,)
 
@@ -152,7 +141,6 @@ def _(combined_mt, hl, meta_data_df, pd):
         pheno = pheno_table[combined_mt.s_corrected]  
     )
 
-    # assign 'case' and 'control' labels
     final_mt_with_case_control = final_mt_with_pheno.annotate_cols(
         case_control_status = hl.if_else(
             hl.is_defined(final_mt_with_pheno.pheno),
@@ -166,6 +154,12 @@ def _(combined_mt, hl, meta_data_df, pd):
 @app.cell
 def _(final_mt_with_case_control):
     final_mt_with_case_control.cols().show(192)
+    return
+
+
+@app.cell
+def _(final_mt_with_case_control):
+    final_mt_with_case_control.s_corrected.show(192)
     return
 
 

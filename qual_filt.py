@@ -11,7 +11,6 @@ def _():
 
     hl.init()
     from bokeh.layouts import gridplot
-
     return gridplot, hl
 
 
@@ -153,6 +152,12 @@ def _(filtered_mt, hl, plot_variant_qc_metrics, remove_uncalled_variants):
 
 @app.cell
 def _(final_mt):
+    final_mt.count_rows()
+    return
+
+
+@app.cell
+def _(final_mt):
     final_mt.describe()
     return
 
@@ -254,12 +259,12 @@ def _(count, filtered_mt, gridplot, hl):
     problematic_variants2.rows().select('cr_case2', 'cr_control2', 'diff2').show(10)
 
     p_case_raw2 = hl.plot.histogram(mt_raw_check2.cr_case2, 
-                                   title='Case Group Call Rate (RAW Data)', 
+                                   title='Case Group Call Rate (First Filtered Data)', 
                                    legend='Case CR', 
                                    range=(0,1)) 
 
     p_control_raw2 = hl.plot.histogram(mt_raw_check2.cr_control2, 
-                                      title='Control Group Call Rate (RAW Data)', 
+                                      title='Control Group Call Rate (First Filtered Data)', 
                                       legend='Control CR', 
                                       range=(0,1))
 

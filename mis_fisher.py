@@ -30,23 +30,20 @@ def _(hl):
 
 @app.cell
 def _(hl, rare_filtered_mis):
-    # 1. Adım: Toplam vaka ve kontrol örnek sayısını bulma 🕵️‍♀️
     total_cases = rare_filtered_mis.aggregate_cols(hl.agg.count_where(rare_filtered_mis.case_control_status == 'case'))
     total_controls = rare_filtered_mis.aggregate_cols(hl.agg.count_where(rare_filtered_mis.case_control_status == 'control'))
 
     print(f"Total case number: {total_cases}")
     print(f"Total control number: {total_controls}")
 
-
-    gene_counts_mt = rare_filtered_mis.group_rows_by(rare_filtered_mis.gene_symbol).aggregate(
-        n_cases_variants=hl.agg.count_where(rare_filtered_mis.case_control_status == 'case'),
-        n_controls_variants=hl.agg.count_where(rare_filtered_mis.case_control_status == 'control')
+    gene_mt = rare_filtered_mis.group_rows_by(rare_filtered_mis.gene_symbol).aggregate(
+        has_variant = hl.agg.any(rare_filtered_mis.GT.is_non_ref())
     )
 
-    gene_counts_table = gene_counts_mt.entries()
-
-    gene_counts_table.show(5)
-
+    gene_counts_table = gene_mt.annotate_rows(
+        n_cases_variants = hl.agg.count_where((gene_mt.case_control_status == 'case') & (gene_mt.has_variant)),
+        n_controls_variants = hl.agg.count_where((gene_mt.case_control_status == 'control') & (gene_mt.has_variant))
+    ).rows()
 
     gene_results = gene_counts_table.annotate(
         fisher_result = hl.fisher_exact_test(
@@ -56,10 +53,9 @@ def _(hl, rare_filtered_mis):
             hl.int32(total_controls - gene_counts_table.n_controls_variants)
         )
     )
-
     gene_burden_results = gene_results.order_by(gene_results.fisher_result.p_value)
 
-    gene_burden_results.show(1000)
+    gene_burden_results.show(100)
     return gene_burden_results, gene_counts_table
 
 
@@ -86,39 +82,39 @@ def _(gene_burden_results, hl):
     adjusted = adjusted.order_by(adjusted.bonferroni_p)
 
     print(f"Total number of tests (Bonferroni m): {n_tests}")
-
-    adjusted.show(100)
-
-    # Save the Bonferroni-adjusted results to a TSV file
     adjusted.export('bonferroni_adjusted_results_mis.tsv')
+    return (adjusted,)
+
+
+@app.cell
+def _(adjusted):
+    adjusted.show(100)
     return
 
 
 @app.cell
-def _(gene_burden_results, np, plt, sns):
-    df = gene_burden_results.select(
-        gene = gene_burden_results.gene_symbol,
-        p_value = gene_burden_results.fisher_result.p_value
+def _():
+    from adjustText import adjust_text
+    return (adjust_text,)
+
+
+@app.cell
+def _(adjust_text, adjusted, np, plt, sns):
+    df = adjusted.select(
+        gene = adjusted.gene_symbol,
+        p_value = adjusted.fisher_result.p_value,
+        bonferroni_p = adjusted.bonferroni_p
     ).to_pandas()
 
-    # Drop missing P-values and sort
     df = df.dropna(subset=['p_value']).sort_values('p_value').reset_index(drop=True)
-
-    # Total number of tests
     n = len(df)
 
-    # Y-Axis: Observed -log10 p-values
     df['observed_logp'] = -np.log10(df['p_value'])
-
-    # X-Axis: Expected -log10 p-values
     df['expected_logp'] = -np.log10((df.index + 1) / (n + 1))
 
-    # Check output
     print(f"Total number of genes: {n}")
-    print(df.head())
 
     plt.figure(figsize=(10, 8), dpi=150)
-
 
     sns.scatterplot(
         data=df, 
@@ -133,27 +129,35 @@ def _(gene_burden_results, np, plt, sns):
     max_val = max(df['expected_logp'].max(), df['observed_logp'].max())
     plt.plot([0, max_val], [0, max_val], color='red', linestyle='--', linewidth=1.5, label='Null Hypothesis')
 
-    top_genes = df.head(10)
-    for i, row in top_genes.iterrows():
-        plt.text(
-            x=row['expected_logp'] + 0.2,
-            y=row['observed_logp'],        
-            s=row['gene'],                 
-            fontsize=10,
+    significant_genes = df[df['bonferroni_p'] < 0.05]
+    print(f"Number of significant genes to label: {len(significant_genes)}")
+
+    texts = []
+    for i, row in significant_genes.iterrows():
+        texts.append(plt.text(
+            x=row['expected_logp'], 
+            y=row['observed_logp'],      
+            s=row['gene'],              
+            fontsize=9,                  
             fontweight='bold',
             color='black',
-            ha='left',                     
-            va='center'                    
-        )
+            ha='center',                  
+            va='center'                  
+        ))
 
-    plt.title("Q-Q Plot: Gene Burden Analysis Missense", fontsize=14, fontweight='bold')
+    if texts:
+        adjust_text(texts, 
+                    arrowprops=dict(arrowstyle="-", color='black', lw=0.5), 
+                    force_points=(0.2, 0.5), 
+                    force_text=(0.5, 0.5))
+
+    plt.title(" Missense Significant Genes (Bonferroni Adjusted)", fontsize=14, fontweight='bold')
     plt.xlabel(r"Expected $-log_{10}(p)$", fontsize=12)
     plt.ylabel(r"Observed $-log_{10}(p)$", fontsize=12)
-    plt.legend(loc='upper left')
+    plt.legend(loc='lower right')
     plt.grid(True, linestyle=':', alpha=0.4)
 
-    plt.savefig('mis_Q-Q_Gene_Burden.png', dpi=300, bbox_inches='tight')
-
+    plt.savefig('mis_significant_QQ_Plot.svg', format='svg', bbox_inches='tight')
     plt.show()
     return
 

@@ -83,7 +83,7 @@ def _(plt, sex_df, sns):
         alpha=0.7
     )
 
-    plt.savefig('sex_estimation.png', dpi=300, bbox_inches='tight')
+    plt.savefig('sex_estimation.svg', format='svg', bbox_inches='tight')
     plt.show()
     return
 
@@ -138,7 +138,7 @@ def _(mt, pd, sex_df):
         how='left'        
     )
 
-    print("Merge completed. New table header:")
+    print("Merge completed")
     print(merged_df.head())
     return (merged_df,)
 
@@ -156,7 +156,7 @@ def _(merged_df, np):
         print("First 5 rows of the filtered 'case' data:")
         print(cases_only_df.head())
 
-    print("\n--- Step 4 (Updated): 'Case' Group Data Cleaning and Comparison ---")
+    print("\n---'Case' Group Data Cleaning and Comparison ---")
 
     sex_map = {
         'Male': 'Male',
@@ -236,9 +236,9 @@ def _(cases_only_df, plt, sns):
     plt.legend(title='Calculated Sex')
     plt.grid(axis='y', linestyle='--', alpha=0.7) 
 
-    plt.savefig('sex_validation_case_group.png', dpi=300, bbox_inches='tight')
-
+    plt.savefig('sex_validation_case_group.svg', format='svg', bbox_inches='tight')
     plt.show()
+
     return
 
 

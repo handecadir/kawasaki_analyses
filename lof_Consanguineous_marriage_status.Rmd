@@ -15,7 +15,6 @@ library(forcats)
 ```
 
 ```{r}
-# SetID dosyasını oku
 setid <- read.table("./kawasaki/plink/kegg_genes_lof.SetID", stringsAsFactors = FALSE)
 colnames(setid) <- c("Pathway", "SNP")
 
@@ -52,123 +51,13 @@ SSD.INFO$nSets
 out = SKAT.SSD.All(SSD.INFO, obj)
 ```
 
-```{r}
-out_df <- out$results
-
-all_pathways_sorted <- out_df %>%
-  filter(!is.na(P.value)) %>%
-  mutate(SetID_ordered = fct_reorder(SetID, P.value, .desc = TRUE))
-
-if (nrow(all_pathways_sorted) > 0) {
-  
-  plot_all_pathways <- ggplot(all_pathways_sorted, aes(x = SetID_ordered, y = P.value)) +
-    
-    geom_col(fill = "steelblue") +
-    
-    geom_text(
-      aes(label = sprintf("%.4e", P.value)), 
-      hjust = -0.1, 
-      size = 3
-    ) +
-    
-    geom_text(
-      data = filter(all_pathways_sorted, P.value < 0.05),
-      aes(label = "*"),
-      hjust = -6,    
-      vjust = 0.75, 
-      size = 8      
-    ) +
-    
-    scale_y_continuous(expand = expansion(mult = c(0, 0.30))) +
-    
-    coord_flip() + 
-    labs(
-      title = "Pathway p-Values:LoF Consanguineous Marriage Status",
-      x = "Pathway",
-      y = "p-Value"
-    ) +
-    theme_minimal(base_size = 10) +
-    theme(
-      axis.text.y = if(nrow(all_pathways_sorted) > 50) element_text(size = 6) else element_text(size = 9),
-      legend.position = "none"
-    )
-  
-  print(plot_all_pathways)
-  
-  ggsave("skat_lof_Consanguineous_marriage_status.png", plot = plot_all_pathways, width = 10, height = max(7, nrow(all_pathways_sorted) * 0.15))
-  
-}
-```
-
-
 
 ```{r}
-# Identify Significant Pathways (P < 0.05)
-significant_pathways <- out$results %>%
-  filter(P.value < 0.05) %>%
-  select(SetID, P.value)
-
-if(nrow(significant_pathways) > 0) {
-  
-  cat(sprintf("Total %d significant pathways found. Scanning SNP list from SetID file...\n", nrow(significant_pathways)))
-
-  if (!exists("File.SetID")) {
-    stop("ERROR: 'File.SetID' variable not found. Please define the SetID file path.")
-  }
-
-  # Read SetID File and Filter Significant Pathways
-  if (requireNamespace("data.table", quietly = TRUE)) {
-    # SetID file usually has no header: Col 1=SetID, Col 2=SNP_ID
-    setid_data <- data.table::fread(File.SetID, header = FALSE, col.names = c("SetID", "SNP_ID"))
-  } else {
-    setid_data <- read.table(File.SetID, header = FALSE, col.names = c("SetID", "SNP_ID"), stringsAsFactors = FALSE)
-  }
-
-  # Filter SNPs only for significant pathways (Inner Join)
-  snp_list_df <- setid_data %>%
-    inner_join(significant_pathways, by = "SetID") %>%
-    rename(Pathway = SetID) # Rename column to match the rest of the code
-  
-  # Check filtering result
-  if(nrow(snp_list_df) == 0) {
-    stop("Significant pathways were found, but no corresponding SNP records exist in the SetID file.")
-  }
-  
-  cat(sprintf("%d SNP matches found in SetID file.\n", nrow(snp_list_df)))
-
-  cat("Reading BIM file...\n")
-  
-  if (requireNamespace("data.table", quietly = TRUE)) {
-    bim_data <- data.table::fread(File.Bim, header = FALSE, 
-                          col.names = c("Chr", "SNP_ID", "Morgan", "Pos", "Alt", "Ref"))
-  } else {
-    bim_data <- read.table(File.Bim, header = FALSE, stringsAsFactors = FALSE)
-    colnames(bim_data) <- c("Chr", "SNP_ID", "Morgan", "Pos", "Alt", "Ref")
-  }
-
-  cat("--- Format Check ---\n")
-  cat("First Sample ID from SetID File: ", snp_list_df$SNP_ID[1], "\n")
-  cat("First Sample ID from BIM File:   ", bim_data$SNP_ID[1], "\n")
-  
-  # Merging Operation (Left Join)
-  final_snp_table <- snp_list_df %>%
-    left_join(bim_data, by = "SNP_ID") %>%
-    select(Pathway, SNP_ID, Chr, Pos, Ref, Alt, P.value) %>% # P.value also added
-    distinct() 
-
-  output_file <- "./kawasaki/plink/significant_pathways_snps_lof_Consanguineous_marriage_status.csv"
-  
-  if(nrow(final_snp_table) > 0) {
-    write.csv(final_snp_table, output_file, row.names = FALSE)
-    cat("\nOPERATION SUCCESSFUL!\n")
-    cat(paste("Total variant rows:", nrow(final_snp_table), "\n"))
-    cat("File saved to:", output_file, "\n")
-    print(head(final_snp_table))
-  } else {
-    warning("Table created but empty (Join operation might have failed, check ID formats).")
-  }
-  
-} else {
-  print("No significant pathways with P < 0.05 found.")
-}
+pathway_summary <- out$results[, c("SetID", "P.value")]
+pathway_summary$Variant <- "LoF"
+write.table(pathway_summary, 
+            file = "./kawasaki/plink/final_lof_Consanguineous_marriage.txt", 
+            sep = "\t", 
+            row.names = FALSE, 
+            quote = FALSE)
 ```
